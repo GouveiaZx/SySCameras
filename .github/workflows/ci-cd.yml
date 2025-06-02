@@ -1,0 +1,118 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        npm ci
+        cd ../frontend
+        npm ci
+        cd ../worker
+        npm ci
+    
+    - name: Run linter
+      run: |
+        cd backend
+        npm run lint
+        cd ../frontend
+        npm run lint
+    
+    - name: Run tests
+      run: |
+        cd backend
+        npm test
+        cd ../frontend
+        npm test
+  
+  build-frontend:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies and build
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+    
+    - name: Upload frontend build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: frontend-build
+        path: frontend/.next
+  
+  deploy:
+    needs: [test, build-frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Download frontend build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: frontend-build
+        path: frontend/.next
+    
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+    
+    - name: Setup known hosts
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+    
+    - name: Deploy Backend
+      run: |
+        rsync -avz --exclude 'node_modules' --exclude '.env' ./backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/backend/
+        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }}/backend && npm ci && npx prisma migrate deploy && pm2 restart backend-api"
+    
+    - name: Deploy Worker
+      run: |
+        rsync -avz --exclude 'node_modules' --exclude '.env' ./worker/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/worker/
+        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }}/worker && npm ci && pm2 restart worker"
+    
+    - name: Deploy Frontend
+      run: |
+        rsync -avz --exclude 'node_modules' --exclude '.env.local' ./frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/frontend/
+        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }}/frontend && npm ci && pm2 restart frontend"
+    
+    - name: Notify Deployment
+      uses: sarisia/actions-status-discord@v1
+      if: always()
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK }}
+        title: "Deploy Concluído"
+        description: "O deploy foi finalizado para o ambiente de produção"
+        color: 0x0000ff
+        username: GitHub Actions 

@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  name       String
+  password   String?  // Senha hash para autenticação
+  role       UserRole
+  active     Boolean  @default(true) // Status ativo/inativo do usuário
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  integrator Integrator?
+  client     Client?
+  cameras    Camera[]
+  recordings Recording[]
+  alertConfigurations AlertConfiguration[]
+  alerts     Alert[]
+  
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  INTEGRATOR
+  CLIENT
+}
+
+model Integrator {
+  id       String  @id @default(uuid())
+  name     String
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id])
+  clients  Client[]
+  cameras  Camera[]
+
+  @@map("integrators")
+}
+
+model Client {
+  id           String      @id @default(uuid())
+  name         String
+  userId       String      @unique
+  user         User        @relation(fields: [userId], references: [id])
+  integratorId String
+  integrator   Integrator  @relation(fields: [integratorId], references: [id])
+  cameras      Camera[]
+
+  @@map("clients")
+}
+
+model Camera {
+  id           String         @id @default(uuid())
+  name         String
+  rtspUrl      String?        // Tornando opcional
+  rtmpUrl      String?
+  hlsUrl       String?        // URL para HLS stream
+  streamStatus String?        @default("INACTIVE") // ACTIVE, INACTIVE
+  recordingStatus String?     @default("INACTIVE") // CONTINUOUS, MOTION, SCHEDULED, INACTIVE
+  clientId     String
+  integratorId String
+  type         String
+  status       String         @default("offline")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  userId       String?
+  
+  // Relacionamentos
+  client       Client         @relation(fields: [clientId], references: [id])
+  integrator   Integrator     @relation(fields: [integratorId], references: [id])
+  user         User?          @relation(fields: [userId], references: [id])
+  
+  // Configurações e streams
+  retentionSetting RetentionSetting?
+  motionDetectionConfig MotionDetectionConfig?
+  recordingSchedules RecordingSchedule[]
+  recordings   Recording[]
+  alertConfigurations AlertConfiguration[]
+  alerts       Alert[]
+  cameraStream CameraStream?
+
+  @@map("cameras")
+}
+
+model Recording {
+  id              String          @id @default(uuid())
+  filename        String
+  url             String
+  date            DateTime
+  duration        Int
+  size            Int
+  cameraId        String
+  camera          Camera          @relation(fields: [cameraId], references: [id])
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  createdAt       DateTime        @default(now())
+  recordingType   RecordingType   @default(MANUAL)
+  triggerEvent    String?         // Descrição do evento que iniciou a gravação (para motion detection)
+  scheduleId      String?         // ID do agendamento que gerou esta gravação, se aplicável
+
+  @@map("recordings")
+}
+
+enum RecordingType {
+  MANUAL          // Gravação manual iniciada pelo usuário
+  MOTION          // Gravação iniciada por detecção de movimento
+  SCHEDULED       // Gravação iniciada por agendamento
+  CONTINUOUS      // Gravação contínua
+}
+
+model Alert {
+  id           String    @id @default(uuid())
+  cameraId     String
+  camera       Camera    @relation(fields: [cameraId], references: [id])
+  status       String    // NEW, READ, DISMISSED
+  type         String    // MOTION, OFFLINE, MANUAL
+  message      String?
+  thumbnailUrl String?
+  date         DateTime  @default(now())
+  readAt       DateTime?
+  userId       String?   // Usuário que criou ou leu o alerta
+  user         User?     @relation(fields: [userId], references: [id])
+
+  @@map("alerts")
+}
+
+model Notification {
+  id            String  @id @default(uuid())
+  type          String
+  userId        String
+  email         String
+  preferences   Json
+
+  @@map("notifications")
+}
+
+model RetentionSetting {
+  id        String   @id @default(uuid())
+  cameraId  String   @unique
+  camera    Camera   @relation(fields: [cameraId], references: [id])
+  days      Int      @default(7)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("retention_settings")
+}
+
+model AlertConfiguration {
+  id             String   @id @default(uuid())
+  cameraId       String
+  camera         Camera   @relation(fields: [cameraId], references: [id])
+  userId         String   
+  user           User     @relation(fields: [userId], references: [id])
+  emailAddresses String[] // Lista de e-mails para notificar
+  notifyOnline   Boolean  @default(true)
+  notifyOffline  Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String   // Usuário que criou a configuração (geralmente integrador)
+
+  @@map("alert_configurations")
+}
+
+model MotionDetectionConfig {
+  id                   String   @id @default(uuid())
+  cameraId             String   @unique
+  camera               Camera   @relation(fields: [cameraId], references: [id])
+  enabled              Boolean  @default(false)
+  sensitivity          Int      @default(50)          // Nível de sensibilidade (1-100)
+  minMotionDuration    Int      @default(3)           // Duração mínima do movimento em segundos para iniciar gravação
+  preRecordingBuffer   Int      @default(5)           // Segundos gravados antes da detecção
+  postRecordingBuffer  Int      @default(10)          // Segundos gravados após o movimento parar
+  notifyOnMotion       Boolean  @default(false)       // Enviar notificações quando movimento é detectado
+  recordOnMotion       Boolean  @default(true)        // Gravar automaticamente quando movimento é detectado
+  detectionAreas       Json?                          // Áreas da imagem para detectar movimento (opcional, JSON)
+  cooldownPeriod       Int      @default(60)          // Tempo mínimo (em segundos) entre gravações de movimento
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("motion_detection_configs")
+}
+
+model RecordingSchedule {
+  id              String         @id @default(uuid())
+  cameraId        String
+  camera          Camera         @relation(fields: [cameraId], references: [id])
+  name            String                              // Nome descritivo para o agendamento
+  enabled         Boolean        @default(true)
+  daysOfWeek      Int[]                              // Dias da semana (0=Domingo, 1=Segunda, etc.)
+  startTime       String                             // Horário de início no formato "HH:MM"
+  endTime         String                             // Horário de fim no formato "HH:MM"
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdBy       String                             // Usuário que criou o agendamento
+
+  @@map("recording_schedules")
+}
+
+// Modelo para armazenar informações de streams de câmeras
+model CameraStream {
+  id           String   @id @default(uuid())
+  cameraId     String   @unique
+  streamName   String   @unique
+  hlsUrl       String
+  status       String   @default("STARTING") // STARTING, ACTIVE, ERROR, STOPPED
+  errorMessage String?
+  startedAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  camera       Camera   @relation(fields: [cameraId], references: [id])
+
+  @@map("camera_streams")
+} 

@@ -1,0 +1,42 @@
+{
+  "name": "cameras-ip-backend",
+  "version": "1.0.0",
+  "description": "API de backend para o sistema de monitoramento de câmeras IP",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.812.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/swagger": "^8.15.0",
+    "@fastify/swagger-ui": "^4.1.0",
+    "@prisma/client": "^5.3.1",
+    "@supabase/supabase-js": "^2.49.8",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.5",
+    "@types/react-dom": "^19.1.5",
+    "aws-sdk": "^2.1473.0",
+    "axios": "^1.9.0",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.29.1",
+    "fastify-plugin": "^4.5.1",
+    "next": "^15.3.2",
+    "node-cron": "^4.0.6",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^7.0.3",
+    "pg": "^8.16.0",
+    "react-player": "^2.16.0",
+    "zod": "^3.25.20"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "prisma": "^5.3.1"
+  }
+}

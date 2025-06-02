@@ -1,0 +1,301 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { 
+  FaPlay, 
+  FaPause, 
+  FaVolumeUp, 
+  FaVolumeMute, 
+  FaExpand, 
+  FaCompress, 
+  FaExclamationTriangle,
+  FaWifi
+} from 'react-icons/fa'
+import { ImSpinner8 } from 'react-icons/im'
+
+interface VideoPlayerProps {
+  url: string
+  width?: string
+  height?: string
+  showControls?: boolean
+  onSnapshot?: (dataUrl: string) => void
+}
+
+export default function VideoPlayer({ 
+  url, 
+  width = '100%', 
+  height = '360px',
+  showControls = true,
+  onSnapshot
+}: VideoPlayerProps) {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [hasError, setHasError] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(1)
+  
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Validar URL
+  const isValidUrl = url && typeof url === 'string' && url.trim() !== ''
+
+  // Resetar estado quando URL muda
+  useEffect(() => {
+    if (isValidUrl) {
+      setHasError(false)
+      setIsLoading(true)
+      setIsPlaying(false)
+      setCurrentTime(0)
+      setDuration(0)
+    } else {
+      setHasError(true)
+      setIsLoading(false)
+    }
+  }, [url, isValidUrl])
+
+  // Gerenciar fullscreen
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return
+    
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        console.error(`Erro ao entrar em fullscreen: ${err.message}`)
+      })
+    } else {
+      document.exitFullscreen()
+    }
+  }
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    console.error('❌ Erro no vídeo:', e.currentTarget.error)
+    console.error('❌ URL que falhou:', url)
+    setHasError(true)
+    setIsLoading(false)
+  }
+
+  const handleVideoLoad = () => {
+    console.log('✅ Vídeo carregado:', url)
+    setHasError(false)
+    setIsLoading(false)
+    
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration)
+    }
+  }
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime)
+    }
+  }
+
+  const togglePlay = () => {
+    if (!videoRef.current) return
+    
+    if (isPlaying) {
+      videoRef.current.pause()
+    } else {
+      videoRef.current.play().catch(err => {
+        console.error('Erro ao reproduzir:', err)
+        setHasError(true)
+      })
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const toggleMute = () => {
+    if (!videoRef.current) return
+    
+    videoRef.current.muted = !isMuted
+    setIsMuted(!isMuted)
+  }
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(e.target.value)
+    setVolume(newVolume)
+    
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume
+    }
+  }
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value)
+    setCurrentTime(newTime)
+    
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime
+    }
+  }
+
+  const retryConnection = () => {
+    console.log('🔄 Tentando reconectar para URL:', url)
+    setHasError(false)
+    setIsLoading(true)
+    
+    if (videoRef.current) {
+      videoRef.current.load()
+    }
+  }
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  if (!isValidUrl) {
+    return (
+      <div 
+        className={`relative bg-black rounded-lg overflow-hidden border border-gray-300 flex items-center justify-center ${isFullscreen ? 'fixed inset-0 z-50' : ''}`} 
+        style={{ width: isFullscreen ? '100%' : width, height: isFullscreen ? '100%' : height }}
+      >
+        <div className="text-center">
+          <FaExclamationTriangle className="text-red-400 text-3xl mx-auto mb-3" />
+          <h3 className="text-white text-lg font-medium mb-2">URL Inválida</h3>
+          <p className="text-gray-300 text-sm">A URL do vídeo não é válida</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div 
+      ref={containerRef}
+      className={`relative bg-black rounded-lg overflow-hidden border border-gray-300 ${isFullscreen ? 'fixed inset-0 z-50' : ''}`} 
+      style={{ width: isFullscreen ? '100%' : width, height: isFullscreen ? '100%' : height }}
+    >
+      {/* Loading */}
+      {isLoading && !hasError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10 rounded-lg">
+          <div className="text-center">
+            <ImSpinner8 className="animate-spin text-blue-400 text-3xl mx-auto mb-3" />
+            <h3 className="text-white text-lg font-medium mb-2">
+              Carregando vídeo...
+            </h3>
+            <p className="text-gray-300 text-sm">
+              Preparando reprodução
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {hasError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10 rounded-lg">
+          <div className="text-center">
+            <FaExclamationTriangle className="text-red-400 text-3xl mx-auto mb-3" />
+            <h3 className="text-white text-lg font-medium mb-2">
+              Falha na Conexão
+            </h3>
+            <p className="text-gray-300 text-sm mb-4">
+              Não foi possível carregar o vídeo. Verifique se o arquivo está disponível.
+            </p>
+            <button
+              onClick={retryConnection}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center mx-auto"
+            >
+              <FaWifi className="mr-2" />
+              Tentar Reconectar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Video Element */}
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        src={url}
+        onError={handleVideoError}
+        onLoadedData={handleVideoLoad}
+        onTimeUpdate={handleTimeUpdate}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onLoadStart={() => setIsLoading(true)}
+        onCanPlay={() => setIsLoading(false)}
+        playsInline
+        preload="metadata"
+        crossOrigin="anonymous"
+      />
+
+      {/* Controles customizados */}
+      {showControls && !hasError && !isLoading && (
+        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-3">
+          {/* Barra de progresso */}
+          <div className="mb-3">
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+            />
+            <div className="flex justify-between text-xs text-gray-300 mt-1">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
+          
+          {/* Controles */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={togglePlay}
+                className="text-white p-2 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
+                aria-label={isPlaying ? 'Pausar' : 'Reproduzir'}
+              >
+                {isPlaying ? <FaPause /> : <FaPlay />}
+              </button>
+              
+              <button
+                onClick={toggleMute}
+                className="text-white p-2 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
+                aria-label={isMuted ? 'Ativar Som' : 'Mudo'}
+              >
+                {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
+              </button>
+              
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={volume}
+                onChange={handleVolumeChange}
+                className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={toggleFullscreen}
+                className="text-white p-2 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
+                aria-label={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
+              >
+                {isFullscreen ? <FaCompress /> : <FaExpand />}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+} 
