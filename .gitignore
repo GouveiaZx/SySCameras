@@ -2,95 +2,39 @@
 node_modules/
 */node_modules/
 
-# Build outputs
-.next/
-dist/
-build/
-
 # Environment variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+*/.env
+
+# Build outputs
+frontend/.next/
+*/build/
+*/dist/
 
 # Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
+*.log
+logs/
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Dependency directories
-node_modules/
-jspm_packages/
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env
-.env.test
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-out
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
 # Temporary folders
 tmp/
-temp/
-
-# Stream files (generated runtime)
+worker/tmp/
 worker/streams/
-*/streams/
 
-# FFmpeg binaries
-ffmpeg-bin/
-*/ffmpeg-bin/
+# Package lock files (geralmente commitados, mas para este projeto vamos ignorar)
+package-lock.json
+*/package-lock.json
 
-# Log files
-*.log
-
-# Database
-*.sqlite
-*.db
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # OS generated files
 .DS_Store
@@ -101,13 +45,11 @@ ffmpeg-bin/
 ehthumbs.db
 Thumbs.db
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# FFmpeg streams and temp files
+worker/streams/
+*.ts
+*.m3u8
 
-# Package lock files (optional - depends on preference)
-package-lock.json
-yarn.lock 
+# Database files
+*.db
+*.sqlite 
