@@ -48,7 +48,7 @@ export default function RecordingsPage() {
       if (camerasData.length > 0 && !selectedCamera) {
         setSelectedCamera(camerasData[0])
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao carregar câmeras:', err)
       setError('Falha ao carregar câmeras. Tente novamente.')
       toast.error('Falha ao carregar câmeras')
@@ -68,7 +68,7 @@ export default function RecordingsPage() {
       setRecordings(result.data)
       setTotalPages(result.meta.totalPages)
       setPage(result.meta.page)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao carregar gravações:', err)
       toast.error('Falha ao carregar gravações')
     } finally {
@@ -186,7 +186,7 @@ export default function RecordingsPage() {
       }
       
       toast.success('Gravação excluída com sucesso')
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao excluir gravação:', err)
       toast.error('Falha ao excluir gravação')
     }
@@ -204,7 +204,8 @@ export default function RecordingsPage() {
         headers: {
           'Authorization': `Bearer ${session.token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({})
       })
       
       const data = await response.json()
@@ -221,7 +222,7 @@ export default function RecordingsPage() {
       } else {
         throw new Error(data.message || 'Erro ao iniciar gravação')
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Erro ao iniciar gravação:', err)
       toast.error(`Falha ao iniciar gravação: ${err.message}`)
     } finally {
@@ -241,7 +242,8 @@ export default function RecordingsPage() {
         headers: {
           'Authorization': `Bearer ${session.token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({})
       })
       
       const data = await response.json()
@@ -258,7 +260,7 @@ export default function RecordingsPage() {
       } else {
         throw new Error(data.message || 'Erro ao parar gravação')
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Erro ao parar gravação:', err)
       toast.error(`Falha ao parar gravação: ${err.message}`)
     } finally {
@@ -283,7 +285,7 @@ export default function RecordingsPage() {
       window.open(downloadUrl, '_blank')
       
       toast.success('Download iniciado')
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Erro no download:', err)
       toast.error('Falha ao fazer download')
     }

@@ -113,33 +113,93 @@ app.options('/api/recordings/download/:filename', (req, res) => {
 app.get('/api/recordings/download/:filename', (req, res) => {
   try {
     const { filename } = req.params;
-    const filePath = path.join(__dirname, '../tmp', filename);
     
-    console.log(`📥 Download solicitado: ${filename}`);
+    console.log(`📥 Download solicitado (antigo): ${filename}`);
     
-    // Verificar se arquivo existe
-    if (!require('fs').existsSync(filePath)) {
-      console.log(`❌ Arquivo não encontrado: ${filename}`);
+    // Se o filename contém uma URL completa, extrair apenas o arquivo
+    let actualFilename = filename;
+    let filePath;
+    
+    if (filename.includes('http://') || filename.includes('https://')) {
+      // Extrair o nome do arquivo da URL
+      const urlParts = filename.split('/');
+      actualFilename = urlParts[urlParts.length - 1];
+      console.log(`🔄 URL completa detectada, extraindo filename: ${actualFilename}`);
+      
+      // Extrair o ID da câmera da URL
+      const cameraMatch = filename.match(/camera_([a-f0-9-]+)/);
+      if (cameraMatch) {
+        const cameraId = cameraMatch[1];
+        filePath = path.join(__dirname, '../tmp', `camera_${cameraId}`, actualFilename);
+        console.log(`📂 Caminho extraído: ${filePath}`);
+      } else {
+        // Tentar encontrar o arquivo em todas as pastas de câmeras
+        const tmpDir = path.join(__dirname, '../tmp');
+        const subdirs = fs.readdirSync(tmpDir, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name);
+        
+        for (const subdir of subdirs) {
+          const possiblePath = path.join(tmpDir, subdir, actualFilename);
+          if (fs.existsSync(possiblePath)) {
+            filePath = possiblePath;
+            console.log(`📁 Arquivo encontrado em: ${subdir}/${actualFilename}`);
+            break;
+          }
+        }
+      }
+    } else {
+      // Filename simples, procurar em todas as pastas
+      const tmpDir = path.join(__dirname, '../tmp');
+      try {
+        const subdirs = fs.readdirSync(tmpDir, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name);
+        
+        for (const subdir of subdirs) {
+          const possiblePath = path.join(tmpDir, subdir, actualFilename);
+          if (fs.existsSync(possiblePath)) {
+            filePath = possiblePath;
+            console.log(`📁 Arquivo encontrado em: ${subdir}/${actualFilename}`);
+            break;
+          }
+        }
+      } catch (err) {
+        console.error('❌ Erro ao procurar arquivo:', err);
+      }
+    }
+    
+    if (!filePath || !fs.existsSync(filePath)) {
+      console.log(`❌ Arquivo não encontrado: ${actualFilename}`);
       return res.status(404).json({
         success: false,
-        message: 'Arquivo não encontrado'
+        message: 'Arquivo não encontrado',
+        filename: actualFilename
       });
     }
     
-    // Headers para forçar download
-    res.set('Content-Type', 'video/mp4');
-    res.set('Content-Disposition', `attachment; filename="${filename}"`);
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Expose-Headers', 'Content-Disposition');
+    const stats = fs.statSync(filePath);
+    console.log(`✅ Arquivo encontrado - Tamanho: ${stats.size} bytes`);
     
-    console.log(`✅ Iniciando download: ${filename}`);
-    res.sendFile(filePath);
+    // Headers para forçar download
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', `attachment; filename="${actualFilename}"`);
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    
+    console.log(`🚀 Download iniciado: ${actualFilename}`);
+    
+    // Stream do arquivo
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
     
   } catch (error) {
     console.error('❌ Erro no download:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro interno do servidor'
+      message: 'Erro interno do servidor',
+      error: error.message
     });
   }
 });
@@ -562,7 +622,9 @@ app.get('/api/recordings/files/:cameraId', (req, res) => {
         size: stats.size,
         created: stats.birthtime,
         modified: stats.mtime,
-        url: `/api/recordings/stream/camera_${cameraId}/${file}`
+        url: `/api/recordings/stream/camera_${cameraId}/${file}`,
+        downloadUrl: `/download/${file}`, // URL mais simples
+        downloadUrlFull: `/api/recordings/download/camera_${cameraId}/${file}` // URL completa de backup
       };
     });
     
@@ -582,7 +644,95 @@ app.get('/api/recordings/files/:cameraId', (req, res) => {
   }
 });
 
+// 🆕 ROTA PARA DOWNLOAD DE GRAVAÇÃO ESPECÍFICA COM FORMATO DUPLICADO (FRONTEND)
+app.get('/api/recordings/download/camera_:cameraId/:duplicatedId/:filename', (req, res) => {
+  try {
+    const { cameraId, filename } = req.params;
+    const filePath = path.join(__dirname, '../tmp', `camera_${cameraId}`, filename);
+    
+    console.log(`📥 Download com formato duplicado - Câmera: ${cameraId}, Arquivo: ${filename}`);
+    console.log(`📂 Caminho: ${filePath}`);
+    
+    if (!fs.existsSync(filePath)) {
+      console.log(`❌ Arquivo não encontrado: ${filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Arquivo não encontrado',
+        path: filePath
+      });
+    }
+    
+    const stats = fs.statSync(filePath);
+    console.log(`✅ Arquivo encontrado - Tamanho: ${stats.size} bytes`);
+    
+    // Headers para download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    
+    console.log(`🚀 Download iniciado: ${filename}`);
+    
+    // Stream do arquivo
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    
+  } catch (error) {
+    console.error('❌ Erro no download:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao fazer download',
+      error: error.message
+    });
+  }
+});
+
 // 🆕 ROTA PARA DOWNLOAD DE GRAVAÇÃO ESPECÍFICA
+app.get('/api/recordings/download/camera_:cameraId/:filename', (req, res) => {
+  try {
+    const { cameraId, filename } = req.params;
+    const filePath = path.join(__dirname, '../tmp', `camera_${cameraId}`, filename);
+    
+    console.log(`📥 Download solicitado - Câmera: ${cameraId}, Arquivo: ${filename}`);
+    console.log(`📂 Caminho completo: ${filePath}`);
+    
+    if (!fs.existsSync(filePath)) {
+      console.log(`❌ Arquivo não encontrado: ${filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Arquivo não encontrado',
+        path: filePath
+      });
+    }
+    
+    const stats = fs.statSync(filePath);
+    console.log(`✅ Arquivo encontrado - Tamanho: ${stats.size} bytes`);
+    
+    // Headers para download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    
+    console.log(`🚀 Iniciando download: ${filename}`);
+    
+    // Stream do arquivo
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    
+  } catch (error) {
+    console.error('❌ Erro ao fazer download:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao fazer download',
+      error: error.message
+    });
+  }
+});
+
+// Manter o endpoint antigo também para compatibilidade
 app.get('/api/recordings/download/:cameraId/:filename', (req, res) => {
   try {
     const { cameraId, filename } = req.params;
@@ -601,6 +751,8 @@ app.get('/api/recordings/download/:cameraId/:filename', (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Length', stats.size);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     
     // Stream do arquivo
     const stream = fs.createReadStream(filePath);
@@ -611,6 +763,72 @@ app.get('/api/recordings/download/:cameraId/:filename', (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao fazer download',
+      error: error.message
+    });
+  }
+});
+
+// 🆕 ENDPOINT DIRETO PARA DOWNLOAD DE ARQUIVOS (FRONTEND)
+app.get('/download/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    console.log(`📥 Download direto solicitado: ${filename}`);
+    
+    // Procurar o arquivo em todas as pastas de câmeras
+    const tmpDir = path.join(__dirname, '../tmp');
+    let filePath = null;
+    
+    try {
+      const subdirs = fs.readdirSync(tmpDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
+      
+      for (const subdir of subdirs) {
+        const possiblePath = path.join(tmpDir, subdir, filename);
+        if (fs.existsSync(possiblePath)) {
+          filePath = possiblePath;
+          console.log(`📁 Arquivo encontrado em: ${subdir}/${filename}`);
+          break;
+        }
+      }
+    } catch (err) {
+      console.error('❌ Erro ao procurar arquivo:', err);
+    }
+    
+    if (!filePath || !fs.existsSync(filePath)) {
+      console.log(`❌ Arquivo não encontrado: ${filename}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Arquivo não encontrado',
+        filename: filename
+      });
+    }
+    
+    const stats = fs.statSync(filePath);
+    console.log(`✅ Download direto - Arquivo: ${filename}, Tamanho: ${stats.size} bytes`);
+    
+    // Headers para FORÇAR download (não streaming)
+    res.setHeader('Content-Type', 'application/octet-stream'); // Força download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    console.log(`🚀 Download forçado iniciado: ${filename}`);
+    
+    // Stream do arquivo
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    
+  } catch (error) {
+    console.error('❌ Erro no download direto:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro no download',
       error: error.message
     });
   }

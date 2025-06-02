@@ -9,39 +9,6 @@ const supabase = createClient(
 
 const WORKER_URL = process.env.WORKER_URL || 'http://localhost:3002';
 
-const { 
-  getRecordings, 
-  getRecordingById, 
-  updateRetentionSetting 
-} = require('../controllers/recordings');
-
-const { 
-  authenticate, 
-  isAdmin, 
-  isIntegrator, 
-  isClient 
-} = require('../middlewares/auth');
-
-// Esquemas para validação do Fastify
-const retentionSchema = {
-  type: 'object',
-  properties: {
-    days: { type: 'integer', minimum: 1, maximum: 60 }
-  },
-  required: ['days']
-};
-
-const queryParamsSchema = {
-  type: 'object',
-  properties: {
-    cameraId: { type: 'string' },
-    startDate: { type: 'string', format: 'date-time' },
-    endDate: { type: 'string', format: 'date-time' },
-    page: { type: 'integer', minimum: 1 },
-    pageSize: { type: 'integer', minimum: 1, maximum: 100 }
-  }
-};
-
 /**
  * Rotas de gravações para o Fastify
  * @param {FastifyInstance} fastify - Instância do Fastify

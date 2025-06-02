@@ -39,9 +39,10 @@ if (process.env.NODE_ENV !== 'production') {
 fastify.decorate('authenticate', async function(request, reply) {
   try {
     console.log('🔐 Iniciando verificação de autenticação...');
+    console.log('📋 URL solicitada:', request.method, request.url);
     
     const authHeader = request.headers.authorization;
-    console.log('📋 Authorization header:', authHeader ? 'Present' : 'Missing');
+    console.log('📋 Authorization header:', authHeader ? `Bearer ${authHeader.substring(7, 20)}...` : 'Missing');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.log('❌ Header de autorização inválido');
@@ -52,7 +53,7 @@ fastify.decorate('authenticate', async function(request, reply) {
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer '
-    console.log('🎫 Token extraído (primeiros 20 chars):', token.substring(0, 20) + '...');
+    console.log('🎫 Token extraído (primeiros 30 chars):', token.substring(0, 30) + '...');
     
     // Verificar token com Supabase
     console.log('🔍 Verificando token com Supabase...');
@@ -60,9 +61,11 @@ fastify.decorate('authenticate', async function(request, reply) {
     
     if (error) {
       console.log('❌ Erro do Supabase:', error.message);
+      console.log('❌ Código de erro:', error.status);
       return reply.code(401).send({ 
         error: 'Não autorizado',
-        message: 'Token de autenticação inválido ou expirado'
+        message: 'Token de autenticação inválido ou expirado',
+        details: error.message
       });
     }
     
@@ -74,7 +77,7 @@ fastify.decorate('authenticate', async function(request, reply) {
       });
     }
 
-    console.log('✅ Usuário validado no Supabase:', user.id);
+    console.log('✅ Usuário validado no Supabase:', user.id, user.email);
 
     // Buscar perfil do usuário no banco de dados
     console.log('🔍 Buscando perfil do usuário no banco...');
@@ -86,9 +89,11 @@ fastify.decorate('authenticate', async function(request, reply) {
 
     if (profileError) {
       console.log('❌ Erro ao buscar perfil:', profileError.message);
+      console.log('❌ Código de erro do perfil:', profileError.code);
       return reply.code(401).send({ 
         error: 'Não autorizado',
-        message: 'Usuário não encontrado'
+        message: 'Usuário não encontrado',
+        details: profileError.message
       });
     }
 
@@ -108,10 +113,12 @@ fastify.decorate('authenticate', async function(request, reply) {
     
   } catch (err) {
     console.error('💥 Erro crítico na autenticação:', err);
+    console.error('💥 Stack trace:', err.stack);
     fastify.log.error('Erro na autenticação:', err);
-    return reply.code(401).send({ 
-      error: 'Não autorizado',
-      message: 'Erro ao validar token de autenticação'
+    return reply.code(500).send({ 
+      error: 'Erro interno',
+      message: 'Erro ao validar token de autenticação',
+      details: err.message
     });
   }
 });

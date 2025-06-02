@@ -13,7 +13,7 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 
 // Configurações
 const TMP_DIR = path.join(__dirname, '../tmp');
-const SEGMENT_DURATION = parseInt(process.env.SEGMENT_DURATION) || 300; // 5 minutos
+const SEGMENT_DURATION = parseInt(process.env.SEGMENT_DURATION) || 30; // 30 segundos para debug
 
 console.log(`🔧 Configuração de segmentação: ${SEGMENT_DURATION} segundos (${SEGMENT_DURATION/60} minutos)`);
 
@@ -91,16 +91,23 @@ async function startNextSegment(camera, recordingProcess) {
   }
 
   try {
-    // Gerar timestamp para o nome do arquivo
+    // Gerar timestamp para o nome do arquivo - AJUSTADO PARA FUSO HORÁRIO BRASIL (UTC-3)
     const now = new Date();
-    const timestamp = now.toISOString().replace(/:/g, '-').replace(/\..+/, '');
+    const brazilTime = new Date(now.getTime() - (3 * 60 * 60 * 1000)); // UTC-3
+    const timestamp = brazilTime.toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
     
-    // Criar nome do arquivo
-    const filename = `client${camera.clientId}_cam${camera.id}_${timestamp}.mp4`;
-    const outputPath = path.join(TMP_DIR, `camera_${camera.id}`, filename);
+    // Criar nome do arquivo SIMPLIFICADO
+    const shortCameraId = camera.id.substring(0, 8); // Primeiros 8 caracteres do ID
+    const filename = `cam_${shortCameraId}_${timestamp}.mp4`;
+    const outputPath = path.resolve(TMP_DIR, `camera_${camera.id}`, filename); // Path absoluto
     
-    // Registrar horário de início do segmento
-    recordingProcess.segmentStartTime = now;
+    console.log(`🔍 DEBUG - Arquivo de saída: ${outputPath}`);
+    console.log(`🔍 DEBUG - Diretório TMP_DIR: ${TMP_DIR}`);
+    console.log(`🔍 DEBUG - Camera ID: ${camera.id}`);
+    console.log(`🔍 DEBUG - Input URL: ${camera.rtspUrl || camera.rtmpUrl}`);
+    
+    // Registrar horário de início do segmento (horário Brasil)
+    recordingProcess.segmentStartTime = brazilTime;
     
     // Determinar URL de entrada (RTSP ou RTMP)
     const inputUrl = camera.rtspUrl || camera.rtmpUrl;
@@ -111,23 +118,30 @@ async function startNextSegment(camera, recordingProcess) {
     }
     
     console.log(`📹 Gravando segmento ${inputType}: ${filename}`);
+    console.log(`🔍 DEBUG - Verificando se diretório existe: ${path.dirname(outputPath)}`);
+    
+    // Verificar se o diretório existe
+    try {
+      await fs.mkdir(path.dirname(outputPath), { recursive: true });
+      console.log(`✅ Diretório confirmado: ${path.dirname(outputPath)}`);
+    } catch (error) {
+      console.error(`❌ Erro ao criar diretório: ${error.message}`);
+    }
     
     // Montar comando FFmpeg para gravar segmento (adaptado para RTSP/RTMP)
     let ffmpegArgs;
     
     if (camera.rtspUrl) {
-      // Para RTSP - Com recodificação para garantir compatibilidade
+      // Para RTSP - Configurações testadas que funcionam
       ffmpegArgs = [
+        '-rtsp_transport', 'tcp',
+        '-timeout', '10000000',   // 10 segundos de timeout
         '-i', camera.rtspUrl,
         '-t', SEGMENT_DURATION.toString(),
-        '-c:v', 'libx264',         // Força H.264
-        '-preset', 'ultrafast',    // Velocidade de codificação
-        '-crf', '23',              // Qualidade
-        '-pix_fmt', 'yuv420p',     // Formato de pixel compatível
-        '-c:a', 'aac',
-        '-b:a', '128k',            // Bitrate de áudio
+        '-c:v', 'copy',           // Copy stream sem recodificar (mais rápido)
+        '-c:a', 'copy',           // Copy áudio sem recodificar
         '-f', 'mp4',
-        '-rtsp_transport', 'tcp',
+        '-avoid_negative_ts', 'make_zero',
         '-movflags', '+faststart', // Para streaming web
         outputPath
       ];
@@ -150,6 +164,18 @@ async function startNextSegment(camera, recordingProcess) {
 
     // Iniciar processo FFmpeg
     const ffmpegProcess = spawn(ffmpegStatic, ffmpegArgs);
+    console.log(`🔍 DEBUG - Processo FFmpeg iniciado com PID: ${ffmpegProcess.pid}`);
+    console.log(`🔍 DEBUG - Comando completo: ${ffmpegStatic} ${ffmpegArgs.join(' ')}`);
+    
+    // Salvar comando em arquivo para debug
+    const debugCommand = `${ffmpegStatic} ${ffmpegArgs.join(' ')}`;
+    try {
+      await fs.writeFile(path.join(__dirname, '../debug-command.txt'), debugCommand);
+      console.log(`🔍 DEBUG - Comando salvo em debug-command.txt`);
+    } catch (error) {
+      console.error(`❌ Erro ao salvar comando: ${error.message}`);
+    }
+    
     recordingProcess.currentSegment = {
       filename,
       outputPath,
@@ -158,6 +184,15 @@ async function startNextSegment(camera, recordingProcess) {
     };
     
     console.log(`Iniciando gravação de segmento: ${filename}`);
+
+    // Capturar saída de erro do FFmpeg para diagnóstico
+    ffmpegProcess.stderr.on('data', (data) => {
+      console.log(`📺 FFmpeg stderr [${camera.id}]: ${data.toString().trim()}`);
+    });
+
+    ffmpegProcess.stdout.on('data', (data) => {
+      console.log(`📺 FFmpeg stdout [${camera.id}]: ${data.toString().trim()}`);
+    });
 
     // Timeout para forçar finalização após duração + margem
     const timeoutMs = (SEGMENT_DURATION + 60) * 1000; // +60s de margem
@@ -209,14 +244,14 @@ async function processSegmentFile(outputPath, filename, recordingProcess, camera
     
     console.log(`📊 Processando segmento: ${filename} (${Math.round(fileSize / 1024 / 1024)}MB)`);
     
-    // Só processar se o arquivo tem tamanho razoável (>100KB)
-    if (fileSize < 100000) {
+    // Só processar se o arquivo tem tamanho razoável (>1KB para debug)
+    if (fileSize < 1000) {
       console.log(`⚠️ Arquivo muito pequeno (${fileSize} bytes), ignorando: ${filename}`);
       return;
     }
     
     // Se o processo terminou normalmente OU se o arquivo é grande o suficiente, fazer upload
-    if (exitCode === 0 || fileSize > 1000000) { // >1MB considera como válido
+    if (exitCode === 0 || fileSize > 1000) { // >1KB para debug
       try {
         console.log(`💾 Processando segmento: ${filename}`);
         
