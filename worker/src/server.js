@@ -4,7 +4,7 @@ const path = require('path');
 const cors = require('cors');
 const streamingService = require('./services/streamingService');
 const recordingController = require('./controllers/recordingController');
-const { startContinuousRecording, stopContinuousRecording } = require('./recording-service');
+const { startContinuousRecording, stopContinuousRecording, getRecordingStats, listActiveRecordings } = require('./recording-service');
 const {
   startStream,
   stopStream,
@@ -16,6 +16,7 @@ const {
   forceReconnect,
   getStreamHealth
 } = require('./controllers/streamController');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.WORKER_PORT || 3002;
@@ -523,6 +524,97 @@ async function getCamerasFromBackend() {
     return [];
   }
 }
+
+// 🆕 MIDDLEWARE PARA SERVIR ARQUIVOS DE GRAVAÇÃO
+app.use('/api/recordings/stream', express.static(path.join(__dirname, '../tmp'), {
+  setHeaders: (res, path) => {
+    // Configurar headers apropriados para vídeo
+    if (path.endsWith('.mp4')) {
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  },
+  // Permitir listagem de diretórios para debug (remover em produção)
+  index: false
+}));
+
+// 🆕 ROTA PARA LISTAR ARQUIVOS DE GRAVAÇÃO (DEBUG)
+app.get('/api/recordings/files/:cameraId', (req, res) => {
+  try {
+    const { cameraId } = req.params;
+    const cameraDir = path.join(__dirname, '../tmp', `camera_${cameraId}`);
+    
+    if (!fs.existsSync(cameraDir)) {
+      return res.json({
+        success: false,
+        message: 'Diretório da câmera não encontrado',
+        files: []
+      });
+    }
+    
+    const files = fs.readdirSync(cameraDir).map(file => {
+      const filePath = path.join(cameraDir, file);
+      const stats = fs.statSync(filePath);
+      
+      return {
+        name: file,
+        size: stats.size,
+        created: stats.birthtime,
+        modified: stats.mtime,
+        url: `/api/recordings/stream/camera_${cameraId}/${file}`
+      };
+    });
+    
+    res.json({
+      success: true,
+      cameraId,
+      files
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao listar arquivos:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao listar arquivos',
+      error: error.message
+    });
+  }
+});
+
+// 🆕 ROTA PARA DOWNLOAD DE GRAVAÇÃO ESPECÍFICA
+app.get('/api/recordings/download/:cameraId/:filename', (req, res) => {
+  try {
+    const { cameraId, filename } = req.params;
+    const filePath = path.join(__dirname, '../tmp', `camera_${cameraId}`, filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Arquivo não encontrado'
+      });
+    }
+    
+    const stats = fs.statSync(filePath);
+    
+    // Headers para download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Length', stats.size);
+    
+    // Stream do arquivo
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    
+  } catch (error) {
+    console.error('❌ Erro ao fazer download:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao fazer download',
+      error: error.message
+    });
+  }
+});
 
 // Middleware de tratamento de erro 404
 app.use((req, res) => {

@@ -218,30 +218,31 @@ async function processSegmentFile(outputPath, filename, recordingProcess, camera
     // Se o processo terminou normalmente OU se o arquivo é grande o suficiente, fazer upload
     if (exitCode === 0 || fileSize > 1000000) { // >1MB considera como válido
       try {
-        console.log(`💾 Processando segmento: ${filename} (upload temporariamente desabilitado)`);
+        console.log(`💾 Processando segmento: ${filename}`);
         
-        // Gerar URL local do worker para servir o arquivo
+        // Gerar URL correta do worker para servir o arquivo
         const WORKER_URL = process.env.WORKER_URL || 'http://localhost:3002';
-        const relativePath = `worker/tmp/camera_${camera.id}/${filename}`;
-        const s3Url = `${WORKER_URL}/api/recordings/stream/${relativePath}`;
+        const relativePath = `camera_${camera.id}/${filename}`;
+        const fileUrl = `${WORKER_URL}/api/recordings/stream/${relativePath}`;
+        const downloadUrl = `${WORKER_URL}/api/recordings/download/${camera.id}/${filename}`;
         
-        // Registrar gravação no banco de dados
+        console.log(`🔗 URL do arquivo: ${fileUrl}`);
+        
+        // Registrar gravação no banco de dados com URLs corretas
         await saveRecordingMetadata({
           filename,
-          url: relativePath, // Salvar caminho relativo no banco
-          date: recordingProcess.segmentStartTime,
+          url: fileUrl, // URL completa para streaming
+          downloadUrl: downloadUrl, // URL para download
+          date: recordingProcess.segmentStartTime.toISOString(),
           duration: SEGMENT_DURATION,
-          size: Math.round(fileSize / 1024 / 1024), // Converter para MB para evitar overflow
+          size: fileSize, // Tamanho em bytes
           cameraId: camera.id,
-          userId: camera.userId || camera.integratorId || '52eeabce-d38a-498b-b29b-6da2b5d89a27', // Usar userId da câmera, ou integrador, ou admin como fallback
+          userId: camera.userId || camera.integratorId || '52eeabce-d38a-498b-b29b-6da2b5d89a27',
           recordingType: 'CONTINUOUS'
         });
         
         console.log(`✅ Metadados salvos no banco: ${filename}`);
-        
-        // Manter arquivo local temporariamente (não apagar até Wasabi funcionar)
-        // await fs.unlink(outputPath);
-        console.log(`📁 Arquivo mantido localmente: ${outputPath}`);
+        console.log(`📁 Arquivo disponível em: ${fileUrl}`);
         
       } catch (error) {
         console.error(`❌ Erro ao processar segmento ${filename}:`, error);

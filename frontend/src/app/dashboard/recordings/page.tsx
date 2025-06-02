@@ -193,109 +193,99 @@ export default function RecordingsPage() {
   }
   
   const handleStartRecording = async () => {
-    console.log('🎬 handleStartRecording iniciado');
+    if (!session?.token || !selectedCamera) return
     
-    if (!selectedCamera) {
-      console.error('❌ Nenhuma câmera selecionada');
-      toast.error('Erro: Nenhuma câmera selecionada');
-      return;
-    }
-    
-    // Verificar e garantir uma sessão válida
+    setProcessingRecording(true)
     try {
-      console.log('🔄 Verificando sessão...');
-      const isValidSession = await ensureValidSession();
+      console.log('🎬 Iniciando gravação contínua...')
       
-      if (!isValidSession || !session?.token) {
-        console.error('❌ Não foi possível obter uma sessão válida');
-        toast.error('Erro de autenticação. Faça logout e login novamente.');
-        return;
-      }
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recordings/start/${selectedCamera.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.token}`,
+          'Content-Type': 'application/json'
+        }
+      })
       
-      console.log('✅ Sessão válida obtida, token length:', session.token.length);
-      console.log('📋 Camera selecionada:', selectedCamera?.id, selectedCamera?.name);
+      const data = await response.json()
       
-      setProcessingRecording(true);
-      console.log('🔄 Chamando startContinuousRecording...');
-      
-      const result = await startContinuousRecording(selectedCamera.id, session.token);
-      console.log('✅ Resultado da gravação:', result);
-      
-      // Atualizar status da câmera na lista
-      setCameras(prev => prev.map(camera => 
-        camera.id === selectedCamera.id 
-          ? { ...camera, recordingStatus: 'CONTINUOUS' } 
-          : camera
-      ));
-      
-      // Atualizar câmera selecionada
-      setSelectedCamera(prev => prev ? { ...prev, recordingStatus: 'CONTINUOUS' } : null);
-      
-      toast.success('Gravação contínua iniciada com sucesso');
-    } catch (err) {
-      console.error('❌ Erro completo ao iniciar gravação:', err);
-      console.error('❌ Erro message:', (err as Error)?.message);
-      
-      // Tratamento específico para diferentes tipos de erro
-      const errorMessage = (err as Error)?.message || 'Erro desconhecido';
-      
-      if (errorMessage.includes('autorizado') || 
-          errorMessage.includes('Token') || 
-          errorMessage.includes('JWT') ||
-          errorMessage.includes('authentication')) {
-        toast.error('Sessão expirada. Faça logout e login novamente para renovar sua autenticação.');
-      } else if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('fetch')) {
-        toast.error('Erro de conexão com o servidor. Verifique se os serviços estão rodando.');
+      if (response.ok && data.success) {
+        console.log('✅ Gravação iniciada:', data)
+        toast.success('Gravação contínua iniciada com sucesso')
+        
+        // Atualizar status da câmera
+        setSelectedCamera(prev => prev ? { ...prev, recordingStatus: 'CONTINUOUS' } : null)
+        
+        // Recarregar lista de câmeras para atualizar status
+        await loadCameras()
       } else {
-        toast.error(`Falha ao iniciar gravação: ${errorMessage}`);
+        throw new Error(data.message || 'Erro ao iniciar gravação')
       }
-    } finally {
-      setProcessingRecording(false);
-    }
-  }
-  
-  const handleStopRecording = async () => {
-    if (!selectedCamera) return
-    
-    // Verificar e garantir uma sessão válida
-    try {
-      console.log('🔄 Verificando sessão para parar gravação...');
-      const isValidSession = await ensureValidSession();
-      
-      if (!isValidSession || !session?.token) {
-        console.error('❌ Não foi possível obter uma sessão válida');
-        toast.error('Erro de autenticação. Faça logout e login novamente.');
-        return;
-      }
-      
-      setProcessingRecording(true)
-      await stopContinuousRecording(selectedCamera.id, session.token)
-      
-      // Atualizar status da câmera na lista
-      setCameras(prev => prev.map(camera => 
-        camera.id === selectedCamera.id 
-          ? { ...camera, recordingStatus: 'INACTIVE' } 
-          : camera
-      ))
-      
-      // Atualizar câmera selecionada
-      setSelectedCamera(prev => prev ? { ...prev, recordingStatus: 'INACTIVE' } : null)
-      
-      toast.success('Gravação contínua interrompida com sucesso')
     } catch (err) {
-      console.error('Erro ao parar gravação:', err)
-      const errorMessage = (err as Error)?.message || 'Erro desconhecido';
-      
-      if (errorMessage.includes('autorizado') || 
-          errorMessage.includes('Token') || 
-          errorMessage.includes('JWT') ||
-          errorMessage.includes('authentication')) {
-        toast.error('Sessão expirada. Faça logout e login novamente.');
-      } else {
-        toast.error('Falha ao parar gravação');
-      }
+      console.error('❌ Erro ao iniciar gravação:', err)
+      toast.error(`Falha ao iniciar gravação: ${err.message}`)
     } finally {
       setProcessingRecording(false)
+    }
+  }
+
+  const handleStopRecording = async () => {
+    if (!session?.token || !selectedCamera) return
+    
+    setProcessingRecording(true)
+    try {
+      console.log('🛑 Parando gravação contínua...')
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recordings/stop/${selectedCamera.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok && data.success) {
+        console.log('✅ Gravação parada:', data)
+        toast.success('Gravação contínua parada com sucesso')
+        
+        // Atualizar status da câmera
+        setSelectedCamera(prev => prev ? { ...prev, recordingStatus: 'INACTIVE' } : null)
+        
+        // Recarregar lista de câmeras para atualizar status
+        await loadCameras()
+      } else {
+        throw new Error(data.message || 'Erro ao parar gravação')
+      }
+    } catch (err) {
+      console.error('❌ Erro ao parar gravação:', err)
+      toast.error(`Falha ao parar gravação: ${err.message}`)
+    } finally {
+      setProcessingRecording(false)
+    }
+  }
+
+  const handleDownloadRecording = async (recording: Recording) => {
+    if (!recording.url) {
+      toast.error('URL de download não disponível')
+      return
+    }
+    
+    try {
+      console.log('📥 Iniciando download da gravação:', recording.filename)
+      
+      // Criar URL de download usando a estrutura do worker
+      const downloadUrl = recording.url.replace('/api/recordings/stream/', '/api/recordings/download/')
+        .replace(recording.filename, `${recording.cameraId}/${recording.filename}`)
+      
+      // Abrir em nova aba para download
+      window.open(downloadUrl, '_blank')
+      
+      toast.success('Download iniciado')
+    } catch (err) {
+      console.error('❌ Erro no download:', err)
+      toast.error('Falha ao fazer download')
     }
   }
   
@@ -536,16 +526,13 @@ export default function RecordingsPage() {
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold">Visualização</h2>
                 <div className="flex space-x-2">
-                  <a
-                    href={`http://localhost:3002/api/recordings/download/${selectedRecording.filename}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
+                  <button
+                    onClick={() => handleDownloadRecording(selectedRecording)}
                     className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center text-sm"
                   >
                     <FiDownload className="mr-1" />
                     Download
-                  </a>
+                  </button>
                   <button
                     onClick={() => handleDeleteRecording(selectedRecording.id)}
                     className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md flex items-center text-sm"
