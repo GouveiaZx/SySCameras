@@ -142,6 +142,16 @@ fastify.get('/', async () => {
   return { message: 'API de Monitoramento de Câmeras IP em funcionamento' };
 });
 
+// Health check para Railway
+fastify.get('/health', async () => {
+  return { 
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    service: 'backend',
+    version: '1.0.0'
+  };
+});
+
 // Tratamento de erros global
 fastify.setErrorHandler((error, request, reply) => {
   fastify.log.error(error);

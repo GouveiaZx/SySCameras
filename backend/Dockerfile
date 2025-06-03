@@ -6,6 +6,8 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
+    openssl \
+    openssl-dev \
     && rm -rf /var/cache/apk/*
 
 # Criar diretório de trabalho
@@ -19,6 +21,9 @@ RUN npm install --production
 
 # Copiar código fonte
 COPY . .
+
+# Gerar cliente Prisma
+RUN npx prisma generate
 
 # Criar usuário não-root para segurança
 RUN addgroup -g 1001 -S nodejs

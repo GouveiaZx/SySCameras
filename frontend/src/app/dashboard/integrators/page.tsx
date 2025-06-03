@@ -30,12 +30,12 @@ export default function IntegratorsPage() {
         setError(null)
         
         console.log('🔄 Carregando integradores na página...')
-        const response = await fetchIntegrators(session.token)
+        const response = await fetchIntegrators({}, session.token)
         console.log('📊 Resposta dos integradores:', response)
         
-        // fetchIntegrators retorna um array diretamente
-        setIntegrators(response || [])
-        console.log('✅ Integradores carregados:', (response || []).length)
+        // fetchIntegrators retorna { data, meta }
+        setIntegrators(response.data || [])
+        console.log('✅ Integradores carregados:', (response.data || []).length)
       } catch (err) {
         console.error('❌ Erro ao carregar integradores:', err)
         setError('Falha ao carregar a lista de integradores. Tente novamente.')

@@ -154,12 +154,12 @@ export default function Dashboard() {
             const [clientsResult, dashboardStatsResult, integratorsResult] = await Promise.allSettled([
               fetchClients(session.token),
               fetchDashboardStats(session.token),
-              fetchIntegrators(session.token)
+              fetchIntegrators({}, session.token)
             ])
             
             const clients = clientsResult.status === 'fulfilled' ? clientsResult.value : []
             const dashboardStats = dashboardStatsResult.status === 'fulfilled' ? dashboardStatsResult.value : null
-            const integrators = integratorsResult.status === 'fulfilled' ? integratorsResult.value : []
+            const integrators = integratorsResult.status === 'fulfilled' ? integratorsResult.value.data || [] : []
             
             // Atualizar com dados completos
             const completeData: DashboardData = {

@@ -341,11 +341,11 @@ export default function AdminDashboard() {
                       {getActivityIcon(activity.type)}
                     </div>
                     <div>
-                      <h3 className="font-medium text-sm">{activity.title}</h3>
+                      <h3 className="font-medium text-sm">{activity.type}</h3>
                       <p className="text-sm text-gray-600">{activity.description}</p>
                       <div className="flex items-center text-xs text-gray-500 mt-1">
                         <FiClock className="mr-1" />
-                        <span>{formatActivityDate(activity.date)}</span>
+                        <span>{formatActivityDate(activity.createdAt)}</span>
                       </div>
                     </div>
                   </div>

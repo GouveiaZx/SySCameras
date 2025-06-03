@@ -1,10 +1,9 @@
 {
-  "dependencies": {
-    "@supabase/supabase-js": "^2.49.8",
-    "axios": "^1.9.0",
-    "hls.js": "^1.6.4",
-    "node-fetch": "^2.7.0",
-    "react-hot-toast": "^2.5.2",
-    "resend": "^4.5.1"
+  "name": "sistema-vigilancia-ip",
+  "version": "1.0.0",
+  "description": "Sistema completo de vigilância IP - Backend, Worker e Frontend",
+  "scripts": {
+    "dev": "echo 'Use docker-compose up para desenvolvimento'",
+    "start": "echo 'Use docker-compose up para produção'"
   }
 }

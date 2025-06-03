@@ -20,7 +20,7 @@ export default function EditCameraPage() {
   const [name, setName] = useState('')
   const [rtspUrl, setRtspUrl] = useState('')
   const [clientId, setClientId] = useState('')
-  const [cameraType, setCameraType] = useState('generic')
+  const [cameraType, setCameraType] = useState<'IP' | 'ANALOG'>('IP')
   const [retentionDays, setRetentionDays] = useState(7)
   
   const [clients, setClients] = useState<Client[]>([])
@@ -33,9 +33,9 @@ export default function EditCameraPage() {
           // Carregar detalhes da câmera
           const cameraData = await fetchCameraById(cameraId, session.token)
           setName(cameraData.name)
-          setRtspUrl(cameraData.rtspUrl)
+          setRtspUrl(cameraData.rtspUrl || '')
           setClientId(cameraData.clientId)
-          setCameraType(cameraData.type)
+          setCameraType(cameraData.type || 'IP')
           setRetentionDays(cameraData.retention?.days || 7)
           
           // Carregar lista de clientes
@@ -162,19 +162,17 @@ export default function EditCameraPage() {
           
           <div className="mb-4">
             <label htmlFor="cameraType" className="block text-sm font-medium text-gray-700 mb-1">
-              Modelo da Câmera
+              Tipo da Câmera
             </label>
             <select
               id="cameraType"
               value={cameraType}
-              onChange={(e) => setCameraType(e.target.value)}
+              onChange={(e) => setCameraType(e.target.value as 'IP' | 'ANALOG')}
               className="w-full p-2 border border-gray-300 rounded"
               required
             >
-              <option value="generic">Genérica</option>
-              <option value="intelbras">Intelbras</option>
-              <option value="hikvision">Hikvision</option>
-              <option value="twg">TWG</option>
+              <option value="IP">IP</option>
+              <option value="ANALOG">Analógica</option>
             </select>
           </div>
           
