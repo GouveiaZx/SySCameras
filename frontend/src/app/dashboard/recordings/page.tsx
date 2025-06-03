@@ -229,7 +229,7 @@ export default function RecordingsPage() {
       setProcessingRecording(false)
     }
   }
-
+  
   const handleStopRecording = async () => {
     if (!session?.token || !selectedCamera) return
     
@@ -251,10 +251,10 @@ export default function RecordingsPage() {
       if (response.ok && data.success) {
         console.log('✅ Gravação parada:', data)
         toast.success('Gravação contínua parada com sucesso')
-        
+      
         // Atualizar status da câmera
-        setSelectedCamera(prev => prev ? { ...prev, recordingStatus: 'INACTIVE' } : null)
-        
+      setSelectedCamera(prev => prev ? { ...prev, recordingStatus: 'INACTIVE' } : null)
+      
         // Recarregar lista de câmeras para atualizar status
         await loadCameras()
       } else {

@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: vigilancia_postgres
+    environment:
+      POSTGRES_DB: vigilancia
+      POSTGRES_USER: vigilancia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - vigilancia-network
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: vigilancia_backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://vigilancia:${POSTGRES_PASSWORD}@postgres:5432/vigilancia
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      WORKER_URL: http://worker:3002
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - vigilancia-network
+    volumes:
+      - ./logs:/app/logs
+
+  # Worker de Streaming
+  worker:
+    build: ./worker
+    container_name: vigilancia_worker
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      BACKEND_URL: http://backend:3001
+      HLS_OUTPUT_PATH: /app/data/hls
+      SNAPSHOTS_PATH: /app/data/snapshots
+      HLS_SEGMENT_TIME: 4
+      HLS_LIST_SIZE: 10
+      FFMPEG_PATH: auto
+    ports:
+      - "3002:3002"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - vigilancia-network
+    volumes:
+      - ./data/hls:/app/data/hls
+      - ./data/snapshots:/app/data/snapshots
+      - ./logs:/app/logs
+
+  # Frontend Next.js
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${FRONTEND_URL}/api
+        NEXT_PUBLIC_WORKER_URL: ${FRONTEND_URL}/streams
+    container_name: vigilancia_frontend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - vigilancia-network
+
+networks:
+  vigilancia-network:
+    driver: bridge 

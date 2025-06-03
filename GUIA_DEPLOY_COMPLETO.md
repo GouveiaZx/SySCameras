@@ -1,399 +1,483 @@
-# 🚀 GUIA COMPLETO DE DEPLOY - Sistema Vigilância IP
+# 🚀 GUIA COMPLETO DE DEPLOY - SISTEMA DE VIGILÂNCIA IP
 
-## 📋 Visão Geral
-
-Este guia mostra como fazer o deploy completo do Sistema de Vigilância IP em produção usando:
-- **VPS** (Backend + Worker + SRS) 
-- **Vercel** (Frontend Next.js)
-- **HTTPS/SSL** (Certbot + Nginx)
-- **Monitoramento** (PM2 + Logs)
-
----
-
-## 🏗️ ARQUITETURA FINAL
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │      VPS        │    │    Supabase     │
-│   (Vercel)      │◄──►│   Backend API   │◄──►│   PostgreSQL    │
-│   Next.js       │    │   Worker        │    │   Auth          │
-│   Dashboard     │    │   SRS Streaming │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                               │
-                               ▼
-                       ┌─────────────────┐
-                       │   Wasabi S3     │
-                       │   Gravações     │
-                       └─────────────────┘
-```
+## 📋 **ÍNDICE**
+1. [Pré-requisitos](#pré-requisitos)
+2. [Configuração do Servidor](#configuração-do-servidor)
+3. [Deploy com Docker](#deploy-com-docker)
+4. [Configuração SSL/HTTPS](#configuração-ssl-https)
+5. [Monitoramento](#monitoramento)
+6. [Backup e Manutenção](#backup-e-manutenção)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🛠️ PRÉ-REQUISITOS
+## 🛠️ **PRÉ-REQUISITOS**
 
-### 1. VPS (DigitalOcean, Linode, AWS EC2)
-- **SO**: Ubuntu 20.04+ / Debian 11+
-- **RAM**: Mínimo 2GB (recomendado 4GB)
-- **CPU**: 2 cores
-- **Storage**: 20GB SSD
-- **Portas**: 22, 80, 443, 3001, 3002, 1935, 8080
+### **SERVIDOR MÍNIMO RECOMENDADO:**
+- **CPU:** 4+ cores (para FFmpeg)
+- **RAM:** 8GB+ (processamento de vídeo)
+- **Storage:** 100GB+ SSD
+- **Banda:** Unlimited (upload para S3)
+- **OS:** Ubuntu 20.04+ / CentOS 8+ / Debian 11+
 
-### 2. Domínio
-- Domínio próprio (ex: vigilancia.seudominio.com)
-- DNS apontando para IP da VPS
-
-### 3. Contas de Serviço
-- ✅ **Supabase**: Já configurado
-- ✅ **Wasabi S3**: Já configurado  
-- 🆕 **Vercel**: Conta gratuita
-- 🆕 **VPS**: Provider de sua escolha
-
----
-
-## 🚀 PASSO 1: CONFIGURAR VPS
-
-### 1.1. Conectar na VPS
+### **DEPENDÊNCIAS NECESSÁRIAS:**
 ```bash
-ssh root@SEU_IP_VPS
+# Docker e Docker Compose
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+sudo apt install docker-compose-plugin
+# ou
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Git
+sudo apt update && sudo apt install git curl
+
+# Nginx (se não usar container)
+sudo apt install nginx certbot python3-certbot-nginx
 ```
 
-### 1.2. Executar Setup Automático
-```bash
-# Baixar scripts de deploy
-wget https://raw.githubusercontent.com/seu-repo/deploy/vps-setup.sh
-chmod +x vps-setup.sh
-
-# Executar configuração (como root)
-sudo bash vps-setup.sh
-```
-
-**O que o script faz:**
-- ✅ Instala Node.js, NPM, PM2
-- ✅ Instala Docker + Docker Compose  
-- ✅ Instala FFmpeg
-- ✅ Configura Nginx
-- ✅ Configura Firewall (UFW)
-- ✅ Cria usuário `vigilancia`
-- ✅ Configura logs e backup
-- ✅ Instala Certbot para SSL
+### **PORTAS NECESSÁRIAS:**
+- **80** - HTTP (Nginx)
+- **443** - HTTPS (Nginx) 
+- **3000** - Frontend (interno)
+- **3001** - Backend (interno)
+- **3002** - Worker (interno)
+- **1935** - RTMP (SRS)
+- **8080** - SRS HTTP
 
 ---
 
-## 🚀 PASSO 2: DEPLOY DA APLICAÇÃO
+## 🏗️ **CONFIGURAÇÃO DO SERVIDOR**
 
-### 2.1. Fazer Deploy do Backend e Worker
+### **1. CLONE DO REPOSITÓRIO:**
 ```bash
-# Mudar para usuário da aplicação
-su - vigilancia
+cd /opt
+sudo git clone https://github.com/seu-usuario/sistema-vigilancia-ip.git
+sudo chown -R $USER:$USER sistema-vigilancia-ip
+cd sistema-vigilancia-ip
+```
 
-# Baixar script de deploy
-wget https://raw.githubusercontent.com/seu-repo/deploy/deploy-app.sh
-chmod +x deploy-app.sh
+### **2. CONFIGURAÇÃO DE AMBIENTE:**
+```bash
+# Copiar arquivo de exemplo
+cp .env.example .env
+
+# Editar configurações
+nano .env
+```
+
+### **3. EXEMPLO DE .env PARA PRODUÇÃO:**
+```env
+# Ambiente
+NODE_ENV=production
+
+# Supabase
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+SUPABASE_ANON_KEY=sua-anon-key
+
+# JWT
+JWT_SECRET=sua-chave-jwt-super-secreta-256bits
+
+# Resend
+RESEND_API_KEY=re_sua_api_key_aqui
+
+# Wasabi S3
+WASABI_ACCESS_KEY=sua-access-key
+WASABI_SECRET_KEY=sua-secret-key
+WASABI_BUCKET=seu-bucket
+WASABI_REGION=us-east-1
+
+# URLs para produção
+NEXT_PUBLIC_API_URL=https://seudominio.com/api
+NEXT_PUBLIC_WORKER_URL=https://seudominio.com/worker
+
+# Configurações de vídeo
+SEGMENT_DURATION=1800
+MAX_CONCURRENT_RECORDINGS=10
+```
+
+### **4. CONFIGURAÇÃO DE FIREWALL:**
+```bash
+# UFW (Ubuntu)
+sudo ufw allow 22
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw allow 1935
+sudo ufw allow 8080
+sudo ufw enable
+
+# Ou iptables
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 1935 -j ACCEPT
+```
+
+---
+
+## 🐳 **DEPLOY COM DOCKER**
+
+### **1. DEPLOY AUTOMATIZADO:**
+```bash
+# Dar permissão de execução
+chmod +x scripts/deploy.sh
 
 # Executar deploy
-bash deploy-app.sh
+./scripts/deploy.sh
 ```
 
-**O que o script faz:**
-- ✅ Clona o repositório
-- ✅ Cria arquivos `.env` com configurações
-- ✅ Instala dependências
-- ✅ Configura SRS com Docker
-- ✅ Inicia Backend e Worker com PM2
-- ✅ Testa todos os serviços
-
-### 2.2. Configurar Wasabi Secret Key
+### **2. DEPLOY MANUAL:**
 ```bash
-# Editar arquivo .env do worker
-nano /home/vigilancia/app/worker/.env
+# Criar diretórios necessários
+mkdir -p nginx/ssl logs data/{postgres,worker,srs}
 
-# Substituir linha:
-WASABI_SECRET_KEY=SUA_SECRET_KEY_AQUI
+# Build e inicialização
+docker-compose build --no-cache
+docker-compose up -d
 
-# Reiniciar worker
-pm2 restart vigilancia-worker
+# Verificar status
+docker-compose ps
+```
+
+### **3. CONFIGURAÇÃO ESPECÍFICA POR AMBIENTE:**
+
+#### **PRODUÇÃO:**
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+```
+
+#### **DESENVOLVIMENTO:**
+```yaml
+# docker-compose.dev.yml  
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
 ```
 
 ---
 
-## 🔒 PASSO 3: CONFIGURAR SSL/HTTPS
+## 🔒 **CONFIGURAÇÃO SSL/HTTPS**
 
+### **1. CERTIFICADO LET'S ENCRYPT (RECOMENDADO):**
 ```bash
-# Voltar para root
-exit
+# Instalar Certbot
+sudo snap install --classic certbot
 
-# Baixar script SSL
-wget https://raw.githubusercontent.com/seu-repo/deploy/ssl-setup.sh
-chmod +x ssl-setup.sh
+# Gerar certificado
+sudo certbot --nginx -d seudominio.com -d www.seudominio.com
 
-# Executar configuração SSL
-sudo bash ssl-setup.sh
+# Auto-renovação
+sudo crontab -e
+# Adicionar linha:
+0 12 * * * /usr/bin/certbot renew --quiet
 ```
 
-**Durante a execução:**
-- Digite seu domínio (ex: vigilancia.seudominio.com)
-- Digite seu email para notificações SSL
-- Aguarde obtenção do certificado
+### **2. CONFIGURAÇÃO NGINX PARA SSL:**
+```nginx
+# /etc/nginx/sites-available/vigilancia
+server {
+    listen 80;
+    server_name seudominio.com www.seudominio.com;
+    return 301 https://$server_name$request_uri;
+}
 
-**Resultado:**
-- ✅ HTTPS configurado
-- ✅ Redirecionamento HTTP → HTTPS
-- ✅ Renovação automática SSL
-- ✅ Headers de segurança
+server {
+    listen 443 ssl http2;
+    server_name seudominio.com www.seudominio.com;
 
----
+    ssl_certificate /etc/letsencrypt/live/seudominio.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/seudominio.com/privkey.pem;
 
-## 🌐 PASSO 4: DEPLOY DO FRONTEND
+    # Configurações SSL modernas
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
 
-### 4.1. Preparar Frontend
-```bash
-# No seu computador local
-cd frontend
+    # Headers de segurança
+    add_header Strict-Transport-Security "max-age=63072000" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
 
-# Baixar script de deploy
-wget https://raw.githubusercontent.com/seu-repo/deploy/deploy-frontend.sh
-chmod +x deploy-frontend.sh
+    # Proxy para containers Docker
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
-# Executar deploy no Vercel
-bash deploy-frontend.sh
+    location /api/ {
+        proxy_pass http://localhost:3001;
+        # ... headers similares
+    }
+
+    location /worker/ {
+        proxy_pass http://localhost:3002;
+        # ... headers similares
+    }
+}
 ```
 
-**Durante a execução:**
-- Digite o domínio da sua VPS
-- Faça login no Vercel (se necessário)
-- Aguarde build e deploy
-
-### 4.2. Configurar Domínio Personalizado (Opcional)
+### **3. ATIVAR CONFIGURAÇÃO:**
 ```bash
-# No dashboard da Vercel
-# Settings > Domains > Add Domain
-# vigilancia-frontend.seudominio.com
-```
-
----
-
-## 🧪 PASSO 5: VALIDAÇÃO FINAL
-
-### 5.1. Teste Automatizado Completo
-```bash
-# Na VPS
-wget https://raw.githubusercontent.com/seu-repo/deploy/validate-production.sh
-chmod +x validate-production.sh
-
-# Executar validação
-bash validate-production.sh vigilancia.seudominio.com https://seu-app.vercel.app
-```
-
-### 5.2. Teste Manual das URLs
-```bash
-# Testar endpoints principais
-curl https://vigilancia.seudominio.com/status
-curl https://vigilancia.seudominio.com/api/health
+sudo ln -s /etc/nginx/sites-available/vigilancia /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 ---
 
-## 📊 COMANDOS DE MONITORAMENTO
+## 📊 **MONITORAMENTO**
 
-### PM2 (Processos Node.js)
+### **1. MONITORAMENTO BÁSICO:**
 ```bash
-pm2 status                    # Status dos processos
-pm2 logs                      # Logs em tempo real
-pm2 restart all               # Reiniciar todos
-pm2 reload all                # Reload sem downtime
-pm2 monit                     # Monitor interativo
+# Status dos containers
+docker-compose ps
+
+# Logs em tempo real
+docker-compose logs -f
+
+# Uso de recursos
+docker stats
+
+# Script de monitoramento automático
+chmod +x scripts/monitor.sh
+./scripts/monitor.sh
 ```
 
-### Docker (SRS Streaming)
-```bash
-docker ps                     # Containers rodando
-docker logs srs-server        # Logs do SRS
-docker stats                  # Uso de recursos
-docker-compose restart        # Reiniciar SRS
+### **2. MONITORAMENTO AVANÇADO COM PROMETHEUS:**
+```yaml
+# docker-compose.monitoring.yml
+version: '3.8'
+services:
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
 ```
 
-### Sistema
+### **3. ALERTAS AUTOMÁTICOS:**
 ```bash
-htop                          # Monitor de recursos
-df -h                         # Espaço em disco
-free -h                       # Uso de memória
-systemctl status nginx       # Status Nginx
-journalctl -f                 # Logs do sistema
+# Script de verificação (cron a cada 5 min)
+*/5 * * * * /opt/sistema-vigilancia-ip/scripts/health-check.sh
 ```
 
 ---
 
-## 🎥 TESTE COM CÂMERA REAL
+## 💾 **BACKUP E MANUTENÇÃO**
 
-### Transmitir Câmera IP
+### **1. BACKUP DOS DADOS:**
 ```bash
-ffmpeg -i rtsp://usuario:senha@192.168.1.100:554/stream1 \
-       -c:v libx264 -preset ultrafast -tune zerolatency \
-       -c:a aac -ar 44100 -ac 2 \
-       -f flv rtmp://vigilancia.seudominio.com/live/STREAM_KEY
+#!/bin/bash
+# scripts/backup.sh
+
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/backup/vigilancia-$DATE"
+
+mkdir -p $BACKUP_DIR
+
+# Backup dos volumes Docker
+docker run --rm -v surveillance_worker_data:/data -v $BACKUP_DIR:/backup alpine tar czf /backup/worker-data.tar.gz -C /data .
+
+# Backup do banco Supabase (se necessário)
+pg_dump $DATABASE_URL > $BACKUP_DIR/database.sql
+
+# Backup das configurações
+cp -r /opt/sistema-vigilancia-ip/.env $BACKUP_DIR/
+cp -r /opt/sistema-vigilancia-ip/nginx/ $BACKUP_DIR/
+
+echo "Backup salvo em: $BACKUP_DIR"
 ```
 
-### Transmitir Webcam USB
+### **2. LIMPEZA AUTOMÁTICA:**
 ```bash
-ffmpeg -f v4l2 -i /dev/video0 \
-       -c:v libx264 -preset ultrafast \
-       -f flv rtmp://vigilancia.seudominio.com/live/STREAM_KEY
+#!/bin/bash
+# scripts/cleanup.sh
+
+# Limpar containers parados
+docker container prune -f
+
+# Limpar imagens não utilizadas  
+docker image prune -f
+
+# Limpar volumes órfãos
+docker volume prune -f
+
+# Limpar arquivos antigos (>30 dias)
+find /opt/sistema-vigilancia-ip/data/worker -name "*.mp4" -mtime +30 -delete
+
+# Rotar logs do Nginx
+logrotate /etc/logrotate.d/nginx
 ```
 
-### Assistir Stream
-```
-https://vigilancia.seudominio.com/live/STREAM_KEY.m3u8
+### **3. AUTOMATIZAR LIMPEZA:**
+```bash
+# Cron job para limpeza semanal
+0 2 * * 0 /opt/sistema-vigilancia-ip/scripts/cleanup.sh
 ```
 
 ---
 
-## 🔧 MANUTENÇÃO
+## 🔧 **TROUBLESHOOTING**
 
-### Atualizar Sistema
-```bash
-# Atualizar código
-cd /home/vigilancia/app
-git pull origin main
+### **PROBLEMAS COMUNS:**
 
-# Reinstalar dependências
-cd backend && npm install
-cd ../worker && npm install
-
-# Reiniciar serviços
-pm2 restart all
-```
-
-### Backup
-```bash
-# Backup manual
-/home/vigilancia/backup.sh
-
-# Logs de backup
-tail -f /var/log/vigilancia/backup.log
-```
-
-### Logs
-```bash
-# Logs da aplicação
-tail -f /var/log/vigilancia/backend.log
-tail -f /var/log/vigilancia/worker.log
-
-# Logs do Nginx
-tail -f /var/log/nginx/access.log
-tail -f /var/log/nginx/error.log
-```
-
----
-
-## 🆘 TROUBLESHOOTING
-
-### Problemas Comuns
-
-#### Backend não inicia
+#### **1. Container não inicia:**
 ```bash
 # Verificar logs
-pm2 logs vigilancia-backend
+docker-compose logs backend
 
-# Verificar .env
-cat /home/vigilancia/app/backend/.env
+# Verificar configurações
+docker-compose config
 
-# Reiniciar
-pm2 restart vigilancia-backend
+# Rebuild sem cache
+docker-compose build --no-cache backend
 ```
 
-#### SSL não funciona
+#### **2. FFmpeg não funciona:**
+```bash
+# Verificar se FFmpeg está instalado no container
+docker exec surveillance-worker ffmpeg -version
+
+# Testar RTSP manualmente
+docker exec surveillance-worker ffmpeg -i rtsp://camera-url -t 5 test.mp4
+```
+
+#### **3. Problemas de rede:**
+```bash
+# Verificar redes Docker
+docker network ls
+docker network inspect surveillance-network
+
+# Testar conectividade entre containers
+docker exec surveillance-backend ping surveillance-worker
+```
+
+#### **4. Alto uso de CPU/Memória:**
+```bash
+# Verificar recursos
+docker stats
+
+# Limitar recursos do container
+# No docker-compose.yml:
+deploy:
+  resources:
+    limits:
+      memory: 2G
+      cpus: '2.0'
+```
+
+#### **5. Problemas de SSL:**
 ```bash
 # Verificar certificado
-certbot certificates
+sudo certbot certificates
 
 # Renovar manualmente
-certbot renew
+sudo certbot renew
 
-# Verificar Nginx
-nginx -t
-systemctl status nginx
+# Testar configuração Nginx
+sudo nginx -t
 ```
 
-#### SRS offline
+### **LOGS IMPORTANTES:**
+
 ```bash
-# Verificar container
-docker ps
-docker logs srs-server
+# Logs dos containers
+docker-compose logs -f backend
+docker-compose logs -f worker
+docker-compose logs -f frontend
 
-# Reiniciar
-cd /home/vigilancia/app/streaming-server
-docker-compose restart
+# Logs do sistema
+sudo journalctl -u docker
+sudo tail -f /var/log/nginx/error.log
+
+# Logs do Worker (FFmpeg)
+docker exec surveillance-worker tail -f /app/logs/ffmpeg.log
 ```
 
-#### Frontend não conecta
+### **COMANDOS ÚTEIS:**
+
 ```bash
-# Verificar CORS no backend
-# Verificar URLs no Vercel
-# Verificar firewall da VPS
+# Restart específico de serviço
+docker-compose restart backend
+
+# Rebuild e restart
+docker-compose up -d --build backend
+
+# Acessar container para debug
+docker exec -it surveillance-backend bash
+
+# Verificar variáveis de ambiente
+docker exec surveillance-backend printenv
+
+# Monitoring em tempo real
+watch docker-compose ps
 ```
 
 ---
 
-## ✅ CHECKLIST FINAL
+## 🎯 **CHECKLIST FINAL DE DEPLOY**
 
-### 🖥️ VPS
-- [ ] VPS configurada com `vps-setup.sh`
-- [ ] Backend rodando na porta 3001
-- [ ] Worker rodando na porta 3002
-- [ ] SRS rodando nas portas 1935/8080
-- [ ] Nginx configurado
-- [ ] Firewall ativo (UFW)
-
-### 🔒 SSL/HTTPS
-- [ ] Certificado SSL obtido
-- [ ] HTTPS funcionando
-- [ ] Redirecionamento HTTP→HTTPS
-- [ ] Renovação automática configurada
-
-### 🌐 Frontend
-- [ ] Deploy no Vercel realizado
-- [ ] Variáveis de ambiente configuradas
-- [ ] Frontend conectando com backend
-- [ ] Login funcionando
-
-### 🧪 Testes
-- [ ] Script `validate-production.sh` executado
-- [ ] Taxa de sucesso ≥ 90%
-- [ ] Autenticação funcionando
-- [ ] CRUD de câmeras funcionando
-- [ ] Streaming simulado funcionando
-
-### 🎥 Streaming
-- [ ] SRS respondendo
-- [ ] RTMP funcionando
-- [ ] HLS funcionando
-- [ ] Teste com câmera real (opcional)
+- [ ] ✅ Servidor configurado (4+ CPU, 8GB+ RAM)
+- [ ] ✅ Docker e Docker Compose instalados
+- [ ] ✅ Firewall configurado (portas 80, 443, 1935)
+- [ ] ✅ Arquivo .env configurado com credenciais
+- [ ] ✅ DNS apontando para o servidor
+- [ ] ✅ Certificado SSL configurado
+- [ ] ✅ Containers rodando sem erros
+- [ ] ✅ URLs funcionando (frontend, API, worker)
+- [ ] ✅ Streaming RTMP testado
+- [ ] ✅ Upload para S3 funcionando
+- [ ] ✅ Sistema de monitoramento ativo
+- [ ] ✅ Backup automatizado configurado
+- [ ] ✅ Limpeza automática agendada
 
 ---
 
-## 📱 URLs FINAIS
+## 🚨 **CONTATOS DE EMERGÊNCIA**
 
-### Backend/API
-- **Principal**: https://vigilancia.seudominio.com
-- **Status**: https://vigilancia.seudominio.com/status  
-- **Health**: https://vigilancia.seudominio.com/api/health
-- **Streaming**: https://vigilancia.seudominio.com/live/
+```bash
+# Para problemas críticos:
+./scripts/monitor.sh restart    # Restart automático
+./scripts/backup.sh             # Backup de emergência
+docker-compose down && docker-compose up -d  # Restart completo
+```
 
-### Frontend
-- **Dashboard**: https://seu-app.vercel.app
-- **Login**: https://seu-app.vercel.app/login
+**🎉 Seu Sistema de Vigilância IP está pronto para produção!**
 
 ---
 
-## 🎉 CONCLUSÃO
-
-Com este guia, você tem um **Sistema de Vigilância IP completo em produção** com:
-
-✅ **Infraestrutura robusta** (VPS + Docker + PM2)  
-✅ **Segurança avançada** (HTTPS + Firewall + Headers)  
-✅ **Frontend moderno** (Next.js + Vercel)  
-✅ **Streaming profissional** (SRS + HLS/RTMP)  
-✅ **Monitoramento completo** (Logs + PM2 + Docker)  
-✅ **Backup automático** (Configurações + Dados)
-
-**O sistema está pronto para uso profissional!** 🚀 
+*Última atualização: 02/06/2025 - Guia completo de deploy em produção* 

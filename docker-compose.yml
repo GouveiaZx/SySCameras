@@ -1,0 +1,170 @@
+version: '3.8'
+
+services:
+  # Banco de dados PostgreSQL (opcional, se não usar Supabase)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: surveillance_db
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+
+  # Backend - APIs e Autenticação
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: surveillance-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - BCRYPT_ROUNDS=12
+      - RESEND_API_KEY=${RESEND_API_KEY}
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    depends_on:
+      - worker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - surveillance-network
+
+  # Worker - Processamento de Vídeo
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: surveillance-worker
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - WASABI_ACCESS_KEY=${WASABI_ACCESS_KEY}
+      - WASABI_SECRET_KEY=${WASABI_SECRET_KEY}
+      - WASABI_BUCKET=${WASABI_BUCKET}
+      - WASABI_REGION=${WASABI_REGION}
+      - SEGMENT_DURATION=1800
+      - MAX_CONCURRENT_RECORDINGS=10
+    ports:
+      - "3002:3002"
+    volumes:
+      - worker_data:/app/tmp
+      - worker_streams:/app/streams
+      - worker_thumbnails:/app/thumbnails
+      - worker_logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - surveillance-network
+
+  # Frontend - Interface Web
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: surveillance-frontend
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=http://backend:3001
+      - NEXT_PUBLIC_WORKER_URL=http://worker:3002
+      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - surveillance-network
+
+  # SRS Server - RTMP Streaming
+  srs:
+    build:
+      context: ./streaming-server
+      dockerfile: Dockerfile
+    container_name: surveillance-srs
+    ports:
+      - "1935:1935"   # RTMP
+      - "1985:1985"   # HTTP API
+      - "8080:8080"   # HTTP Server
+      - "8088:8088"   # HTTPS Server
+    volumes:
+      - srs_logs:/usr/local/srs/objs/logs
+      - srs_recordings:/usr/local/srs/objs/nginx/html/dvr
+    environment:
+      - TZ=America/Sao_Paulo
+    restart: unless-stopped
+    networks:
+      - surveillance-network
+
+  # Nginx - Proxy Reverso e Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: surveillance-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+      - worker
+    networks:
+      - surveillance-network
+
+  # Watchtower - Auto-update containers
+  watchtower:
+    image: containrrr/watchtower
+    container_name: surveillance-watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600
+      - WATCHTOWER_INCLUDE_STOPPED=true
+    restart: unless-stopped
+    networks:
+      - surveillance-network
+
+volumes:
+  # postgres_data:
+  #   driver: local
+  worker_data:
+    driver: local
+  worker_streams:
+    driver: local
+  worker_thumbnails:
+    driver: local
+  worker_logs:
+    driver: local
+  srs_logs:
+    driver: local
+  srs_recordings:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  surveillance-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

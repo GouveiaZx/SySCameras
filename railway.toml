@@ -1,0 +1,25 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+
+[[services]]
+name = "backend"
+source = "backend"
+variables = { NODE_ENV = "production" }
+
+[[services]]
+name = "worker"
+source = "worker"
+variables = { NODE_ENV = "production" }
+
+[services.backend.healthcheck]
+path = "/health"
+timeout = 30
+
+[services.worker.healthcheck]
+path = "/health"
+timeout = 30 

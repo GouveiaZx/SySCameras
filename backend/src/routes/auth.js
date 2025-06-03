@@ -1,5 +1,6 @@
 const { register, login, getUserProfile } = require('../controllers/auth');
 const { authenticate } = require('../middlewares/auth');
+const { sendTestEmail } = require('../services/emailService');
 
 // Esquemas para validação do Fastify
 const userSchema = {
@@ -62,6 +63,8 @@ async function authRoutes(fastify, options) {
         200: {
           type: 'object',
           properties: {
+            message: { type: 'string' },
+            token: { type: 'string' },
             user: {
               type: 'object',
               properties: {
@@ -70,8 +73,7 @@ async function authRoutes(fastify, options) {
                 name: { type: 'string' },
                 role: { type: 'string' }
               }
-            },
-            token: { type: 'string' }
+            }
           }
         }
       }
@@ -82,6 +84,24 @@ async function authRoutes(fastify, options) {
   // Rota para perfil do usuário (protegida)
   fastify.get('/profile', {
     preHandler: authenticate,
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                email: { type: 'string' },
+                name: { type: 'string' },
+                role: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    },
     handler: getUserProfile
   });
 
@@ -124,6 +144,51 @@ async function authRoutes(fastify, options) {
         error: 'Erro interno',
         message: 'Erro ao realizar logout'
       });
+    }
+  });
+
+  // Rota para teste de email
+  fastify.post('/test-email', {
+    preHandler: authenticate,
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          email: { type: 'string', format: 'email' }
+        },
+        required: ['email']
+      }
+    },
+    handler: async (request, reply) => {
+      try {
+        const { email } = request.body;
+        
+        console.log(`📧 Iniciando teste de email para: ${email}`);
+        
+        const result = await sendTestEmail(email);
+        
+        if (result.success) {
+          return reply.code(200).send({
+            success: true,
+            message: 'E-mail de teste enviado com sucesso',
+            messageId: result.messageId
+          });
+        } else {
+          return reply.code(500).send({
+            success: false,
+            error: 'Falha ao enviar e-mail de teste',
+            details: result.error
+          });
+        }
+        
+      } catch (error) {
+        console.error('❌ Erro no teste de email:', error);
+        return reply.code(500).send({
+          success: false,
+          error: 'Erro interno',
+          message: error.message
+        });
+      }
     }
   });
 }
