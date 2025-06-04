@@ -79,8 +79,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - NEXT_PUBLIC_API_URL=http://backend:3001
-      - NEXT_PUBLIC_WORKER_URL=http://worker:3002
+      - NEXT_PUBLIC_API_URL=https://nuvem.safecameras.com.br/api
+      - NEXT_PUBLIC_WORKER_URL=https://nuvem.safecameras.com.br/worker
       - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     ports:
