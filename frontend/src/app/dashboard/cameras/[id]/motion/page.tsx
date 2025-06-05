@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchCameraById, Camera } from '@/services/cameraService';
 import { ImSpinner8 } from 'react-icons/im';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Tipos para detecção de movimento
 interface MotionDetectionConfig {

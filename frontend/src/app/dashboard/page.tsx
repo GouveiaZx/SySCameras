@@ -7,7 +7,7 @@ import StatusCards from '@/components/dashboard/StatusCards'
 import { FiCamera, FiVideo, FiHardDrive, FiAlertCircle } from 'react-icons/fi'
 import { ImSpinner8 } from 'react-icons/im'
 import { fetchCameras } from '@/services/cameraService'
-import { fetchClients, fetchIntegrators, fetchDashboardStats } from '@/services/adminService'
+import { fetchClients as fetchAdminClients, fetchIntegrators, fetchDashboardStats } from '@/services/adminService'
 import toast from 'react-hot-toast'
 
 // Tipos para o dashboard (baseados em dados reais)
@@ -150,24 +150,41 @@ export default function Dashboard() {
           }
           
           try {
-            // Usar Promise.allSettled para não falhar se uma consulta der erro
-            const [clientsResult, dashboardStatsResult, integratorsResult] = await Promise.allSettled([
-              fetchClients(session.token),
-              fetchDashboardStats(session.token),
-              fetchIntegrators({}, session.token)
-            ])
+            // Buscar contagens diretamente do Supabase para maior confiabilidade
+            const { supabase } = await import('@/utils/supabase');
             
-            const clients = clientsResult.status === 'fulfilled' ? clientsResult.value : []
-            const dashboardStats = dashboardStatsResult.status === 'fulfilled' ? dashboardStatsResult.value : null
-            const integrators = integratorsResult.status === 'fulfilled' ? integratorsResult.value.data || [] : []
+            const [clientsCountResult, integratorsCountResult, camerasCountResult] = await Promise.allSettled([
+              supabase.from('clients_real').select('id', { count: 'exact', head: true }),
+              supabase.from('integrators').select('id', { count: 'exact', head: true }),
+              supabase.from('cameras').select('id', { count: 'exact', head: true })
+            ]);
+            
+                         let totalClients = 0;
+             let totalIntegrators = 0;
+             let totalCamerasFromDB = cameras.length; // usar contagem das câmeras já carregadas
+             
+             if (clientsCountResult.status === 'fulfilled' && clientsCountResult.value.count !== null) {
+               totalClients = clientsCountResult.value.count;
+             }
+             
+             if (integratorsCountResult.status === 'fulfilled' && integratorsCountResult.value.count !== null) {
+               totalIntegrators = integratorsCountResult.value.count;
+             }
+             
+             if (camerasCountResult.status === 'fulfilled' && camerasCountResult.value.count !== null) {
+               totalCamerasFromDB = camerasCountResult.value.count;
+             }
+             
+             console.log('✅ Contagens obtidas:', { totalClients, totalIntegrators, totalCamerasFromDB });
             
             // Atualizar com dados completos
             const completeData: DashboardData = {
               ...basicData,
-              totalClients: clients.length,
-              totalIntegrators: integrators.length,
+              totalCameras: totalCamerasFromDB,
+              totalClients,
+              totalIntegrators,
               totalRecordings: 0, // Não disponível ainda
-              totalAlerts: dashboardStats?.totalAlerts || { total: 0, new: 0, read: 0 },
+              totalAlerts: { total: 0, new: 0, read: 0 },
               storageUsed: { total: 0, percentage: 0 } // Não disponível ainda
             }
             

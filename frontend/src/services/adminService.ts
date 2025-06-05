@@ -4,7 +4,7 @@
 
 import { supabase } from '@/utils/supabase'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 // Tipos
 export interface DashboardStats {
@@ -230,19 +230,20 @@ export async function fetchIntegrators(filters: IntegratorFilters = {}, token: s
  */
 export async function fetchClients(token: string): Promise<Client[]> {
   try {
-    // Usar Supabase diretamente para buscar clientes
+    // Usar Supabase diretamente para buscar clientes da tabela real
     const { data: clients, error } = await (await import('@/utils/supabase')).supabase
-      .from('clients')
+      .from('clients_real')
       .select(`
         id,
         name,
-        userId,
-        integratorId,
-        createdAt,
+        "userId",
+        "integratorId",
+        "createdAt",
+        company,
         users!inner (
           email,
           createdAt,
-          active
+          isActive
         ),
         integrators (
           name
@@ -260,9 +261,9 @@ export async function fetchClients(token: string): Promise<Client[]> {
       id: client.id,
       name: client.name,
       email: client.users?.email || '',
-      company: '',
+      company: client.company || '',
       phone: '',
-      status: client.users?.active ? 'active' : 'inactive',
+      status: client.users?.isActive ? 'active' : 'inactive',
       integratorId: client.integratorId,
       createdAt: client.users?.createdAt || client.createdAt || new Date().toISOString(),
       user: {

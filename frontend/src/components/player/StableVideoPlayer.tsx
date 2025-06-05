@@ -84,7 +84,7 @@ export default function StableVideoPlayer({
   useEffect(() => {
     const loadQualities = async () => {
       try {
-        const response = await fetch('http://localhost:3002/api/streams/qualities')
+        const response = await fetch('/worker/api/streams/qualities')
         const data = await response.json()
         
         if (data.success) {
@@ -311,7 +311,7 @@ export default function StableVideoPlayer({
       setHasError(false)
       
       // Verificar se o stream existe antes de tentar alterar qualidade
-      const statusResponse = await fetch(`http://localhost:3002/api/streams/${cameraId}/status`)
+      const statusResponse = await fetch(`/worker/api/streams/${cameraId}/status`)
       const statusData = await statusResponse.json()
       
       if (!statusData.success || statusData.data.status !== 'running') {
@@ -327,7 +327,7 @@ export default function StableVideoPlayer({
         hlsRef.current = null
       }
       
-      const response = await fetch(`http://localhost:3002/api/streams/${cameraId}/quality`, {
+      const response = await fetch(`/worker/api/streams/${cameraId}/quality`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

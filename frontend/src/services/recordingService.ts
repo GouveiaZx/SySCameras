@@ -215,7 +215,7 @@ export async function startContinuousRecording(cameraId: string, token: string):
   try {
     console.log('🎬 Iniciando gravação contínua para câmera:', cameraId);
     
-    const response = await fetch(`http://localhost:3001/api/cameras/${cameraId}/recording/start`, {
+    const response = await fetch(`/api/cameras/${cameraId}/recording/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -252,7 +252,7 @@ export async function stopContinuousRecording(cameraId: string, token: string): 
   try {
     console.log('🛑 Parando gravação contínua para câmera:', cameraId);
     
-    const response = await fetch(`http://localhost:3001/api/cameras/${cameraId}/recording/stop`, {
+    const response = await fetch(`/api/cameras/${cameraId}/recording/stop`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -312,7 +312,7 @@ export async function cleanupOldRecordings(token: string): Promise<any> {
   try {
     console.log('🧹 Iniciando limpeza de gravações antigas');
     
-    const response = await fetch('http://localhost:3001/api/recordings/cleanup', {
+    const response = await fetch('/api/recordings/cleanup', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -351,7 +351,7 @@ export async function updateRetentionSetting(
   try {
     console.log(`🗃️ Atualizando retenção para câmera ${cameraId}: ${days} dias`);
     
-    const response = await fetch(`http://localhost:3001/api/cameras/${cameraId}/retention`, {
+    const response = await fetch(`/api/cameras/${cameraId}/retention`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

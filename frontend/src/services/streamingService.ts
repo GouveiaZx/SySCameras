@@ -1,6 +1,7 @@
 import { StreamConfig, StreamQuality } from '@/components/stream/StreamConfigForm'
 
-const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:3002'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || ''
 
 export interface StartStreamRequest {
   cameraId: string
@@ -86,7 +87,7 @@ class StreamingService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const response = await fetch(`${WORKER_URL}${endpoint}`, {
+    const response = await fetch(`/worker/api${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -116,7 +117,7 @@ class StreamingService {
         quality: config.quality
       }
 
-      const result = await this.makeRequest<StartStreamResponse>('/api/streams/start', {
+      const result = await this.makeRequest<StartStreamResponse>('/streams/start', {
         method: 'POST',
         body: JSON.stringify(request),
       })
@@ -134,7 +135,7 @@ class StreamingService {
     try {
       console.log('🛑 Parando stream:', cameraId)
 
-      const result = await this.makeRequest<{ success: boolean; message: string }>('/api/streams/stop', {
+      const result = await this.makeRequest<{ success: boolean; message: string }>('/streams/stop', {
         method: 'POST',
         body: JSON.stringify({ cameraId }),
       })
@@ -150,7 +151,7 @@ class StreamingService {
 
   async getStreamStatus(cameraId: string): Promise<StreamStatus> {
     try {
-      const result = await this.makeRequest<StreamStatus>(`/api/streams/${cameraId}/status`)
+      const result = await this.makeRequest<StreamStatus>(`/streams/${cameraId}/status`)
       return result
     } catch (error) {
       console.error('❌ Erro ao obter status do stream:', error)
@@ -160,7 +161,7 @@ class StreamingService {
 
   async getActiveStreams(): Promise<ActiveStreamsResponse> {
     try {
-      const result = await this.makeRequest<ActiveStreamsResponse>('/api/streams/active')
+      const result = await this.makeRequest<ActiveStreamsResponse>('/streams/active')
       return result
     } catch (error) {
       console.error('❌ Erro ao listar streams ativos:', error)
@@ -170,7 +171,7 @@ class StreamingService {
 
   async getWorkerStatus(): Promise<any> {
     try {
-      const result = await this.makeRequest<any>('/api/worker/status')
+      const result = await this.makeRequest<any>('/worker/status')
       return result
     } catch (error) {
       console.error('❌ Erro ao obter status do worker:', error)
@@ -198,7 +199,7 @@ class StreamingService {
 
   // Gerar URL HLS para preview
   getHLSUrl(cameraId: string): string {
-    return `${WORKER_URL}/hls/${cameraId}/stream.m3u8`
+    return `/hls/${cameraId}/stream.m3u8`
   }
 
   // Alias para getStreamStatus para compatibilidade
@@ -240,7 +241,7 @@ class StreamingService {
 
         console.log('🎬 Iniciando stream com dados:', startRequest)
 
-        const result = await this.makeRequest<StartStreamResponse>('/api/streams/start', {
+        const result = await this.makeRequest<StartStreamResponse>('/streams/start', {
           method: 'POST',
           body: JSON.stringify(startRequest),
         })

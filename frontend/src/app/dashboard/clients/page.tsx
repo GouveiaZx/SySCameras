@@ -118,13 +118,18 @@ export default function ClientsPage() {
 
   // Salvar cliente (criar ou editar)
   const handleSaveClient = async (clientData: ClientFormData, mode: 'create' | 'edit') => {
+    console.log('🔄 handleSaveClient iniciado:', { clientData, mode });
+    
     if (!session?.token) {
+      console.error('❌ Sessão inválida');
       toast.error('Sessão inválida')
       return
     }
 
     try {
       if (mode === 'create') {
+        console.log('🔄 Criando novo cliente...');
+        
         // Criar novo cliente
         const createData: CreateClientData = {
           name: clientData.name,
@@ -134,9 +139,32 @@ export default function ClientsPage() {
           isActive: clientData.isActive ?? true
         }
         
-        await createClient(createData, session.token)
+        console.log('📤 Dados para criação:', createData);
+        
+        const result = await createClient(createData, session.token)
+        console.log('✅ Cliente criado:', result);
+        
+        // Atualização otimista - adicionar cliente diretamente à lista
+        const newClient: Client = {
+          id: result.id,
+          name: result.name,
+          integratorId: result.integratorId,
+          userId: result.userId,
+          email: clientData.email,
+          company: clientData.company,
+          isActive: clientData.isActive ?? true,
+          createdAt: result.createdAt || new Date().toISOString(),
+          updatedAt: result.updatedAt || new Date().toISOString()
+        }
+        
+        // Adicionar à lista local imediatamente
+        setClients(prevClients => [newClient, ...prevClients])
+        setFilteredClients(prevClients => [newClient, ...prevClients])
+        
         toast.success('Cliente criado com sucesso!')
       } else {
+        console.log('🔄 Editando cliente existente...');
+        
         // Editar cliente existente
         const updateData: UpdateClientData = {
           name: clientData.name,
@@ -149,15 +177,33 @@ export default function ClientsPage() {
           updateData.password = clientData.password
         }
         
-        await updateClient(modalState.client!.id, updateData, session.token)
+        const updatedClient = await updateClient(modalState.client!.id, updateData, session.token)
+        
+        // Atualização otimista - atualizar cliente na lista local
+        const updateClientInList = (prevClients: Client[]) => 
+          prevClients.map(client => 
+            client.id === modalState.client!.id 
+              ? { ...client, ...updatedClient, email: clientData.email } 
+              : client
+          )
+        
+        setClients(updateClientInList)
+        setFilteredClients(updateClientInList)
+        
         toast.success('Cliente atualizado com sucesso!')
       }
       
-      // Recarregar lista e fechar modal
-      await loadClients()
+      // Fechar modal
       closeModal()
+      console.log('✅ Processo concluído com sucesso');
+      
+      // Recarregar lista em background para sincronizar com servidor
+      setTimeout(() => {
+        loadClients()
+      }, 1000)
+      
     } catch (error) {
-      console.error('Erro ao salvar cliente:', error)
+      console.error('❌ Erro ao salvar cliente:', error)
       toast.error(mode === 'create' ? 'Falha ao criar cliente' : 'Falha ao atualizar cliente')
     }
   }
@@ -171,11 +217,22 @@ export default function ClientsPage() {
 
     try {
       await deleteClient(clientId, session.token)
-      toast.success('Cliente removido com sucesso!')
       
-      // Recarregar lista
-      await loadClients()
+      // Atualização otimista - remover cliente da lista local imediatamente
+      const removeClientFromList = (prevClients: Client[]) => 
+        prevClients.filter(client => client.id !== clientId)
+      
+      setClients(removeClientFromList)
+      setFilteredClients(removeClientFromList)
+      
+      toast.success('Cliente removido com sucesso!')
       setConfirmDelete(null)
+      
+      // Recarregar lista em background para sincronizar com servidor
+      setTimeout(() => {
+        loadClients()
+      }, 1000)
+      
     } catch (error) {
       console.error('Erro ao deletar cliente:', error)
       toast.error('Falha ao remover cliente')

@@ -74,7 +74,7 @@ export default function HLSPlayer({
   // Buscar qualidades disponíveis do worker
   const fetchAvailableQualities = async () => {
     try {
-      const response = await fetch('http://localhost:3002/api/streams/qualities')
+      const response = await fetch('/worker/api/streams/qualities')
       const data = await response.json()
       
       if (data.success) {
@@ -96,7 +96,7 @@ export default function HLSPlayer({
       const urlParts = url.split('/')
       const cameraId = urlParts[urlParts.length - 2] // penúltimo item
       
-      const response = await fetch(`http://localhost:3002/api/streams/${cameraId}/quality`, {
+      const response = await fetch(`/worker/api/streams/${cameraId}/quality`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

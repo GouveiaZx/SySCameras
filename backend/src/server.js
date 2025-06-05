@@ -125,6 +125,7 @@ fastify.decorate('authenticate', async function(request, reply) {
 
 // Registrar rotas
 fastify.register(require('./routes/auth'), { prefix: '/api/auth' });
+fastify.register(require('./routes/clients'), { prefix: '/api' });
 fastify.register(require('./routes/cameras'), { prefix: '/api' });
 fastify.register(require('./routes/recordings'), { prefix: '/api/recordings' });
 fastify.register(require('./routes/alerts'), { prefix: '/api/alerts' });

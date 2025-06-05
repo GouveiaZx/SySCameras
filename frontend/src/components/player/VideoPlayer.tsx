@@ -43,10 +43,11 @@ export default function VideoPlayer({
 
   // Validar URL
   const isValidUrl = url && typeof url === 'string' && url.trim() !== ''
+  const isRtmpUrl = isValidUrl && url.toLowerCase().startsWith('rtmp://')
 
   // Resetar estado quando URL muda
   useEffect(() => {
-    if (isValidUrl) {
+    if (isValidUrl && !isRtmpUrl) {
       setHasError(false)
       setIsLoading(true)
       setIsPlaying(false)
@@ -57,11 +58,15 @@ export default function VideoPlayer({
       const downloadPath = url.replace('/api/recordings/stream/', '/api/recordings/download/')
       setDownloadUrl(downloadPath)
       
+    } else if (isRtmpUrl) {
+      // URLs RTMP não são suportadas diretamente no navegador
+      setHasError(true)
+      setIsLoading(false)
     } else {
       setHasError(true)
       setIsLoading(false)
     }
-  }, [url, isValidUrl])
+  }, [url, isValidUrl, isRtmpUrl])
 
   // Gerenciar fullscreen
   useEffect(() => {
@@ -174,16 +179,28 @@ export default function VideoPlayer({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  if (!isValidUrl) {
+  if (!isValidUrl || isRtmpUrl) {
     return (
       <div 
         className={`relative bg-black rounded-lg overflow-hidden border border-gray-300 flex items-center justify-center ${isFullscreen ? 'fixed inset-0 z-50' : ''}`} 
         style={{ width: isFullscreen ? '100%' : width, height: isFullscreen ? '100%' : height }}
       >
         <div className="text-center">
-          <FaExclamationTriangle className="text-red-400 text-3xl mx-auto mb-3" />
-          <h3 className="text-white text-lg font-medium mb-2">URL Inválida</h3>
-          <p className="text-gray-300 text-sm">A URL do vídeo não é válida</p>
+          <FaWifi className="text-yellow-400 text-3xl mx-auto mb-3" />
+          <h3 className="text-white text-lg font-medium mb-2">
+            {isRtmpUrl ? 'Stream RTMP Detectado' : 'URL Inválida'}
+          </h3>
+          <p className="text-gray-300 text-sm">
+            {isRtmpUrl 
+              ? 'URLs RTMP não são suportadas diretamente no navegador. Configure uma URL RTSP para esta câmera e use o Stream HLS.'
+              : 'A URL do vídeo não é válida'
+            }
+          </p>
+          {isRtmpUrl && (
+            <p className="text-gray-400 text-xs mt-2">
+              URL: {url}
+            </p>
+          )}
         </div>
       </div>
     )

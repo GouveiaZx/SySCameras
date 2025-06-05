@@ -484,8 +484,8 @@ ${segmentName}
    * @returns {string} URL HLS
    */
   getHLSUrl(cameraId) {
-    const workerPort = process.env.WORKER_PORT || 3002;
-    return `http://localhost:${workerPort}/hls/${cameraId}/stream.m3u8`;
+    // Usar URL relativa que será resolvida através do nginx proxy
+    return `/hls/${cameraId}/stream.m3u8`;
   }
 
   /**

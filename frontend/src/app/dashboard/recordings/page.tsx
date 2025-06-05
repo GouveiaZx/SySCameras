@@ -547,7 +547,7 @@ export default function RecordingsPage() {
               
               <div className="relative bg-black rounded-md h-[350px] mb-4">
                 <VideoPlayer 
-                  url={`http://localhost:3002/api/recordings/stream/${selectedRecording.url}`} 
+                  url={`/worker/api/recordings/stream/${selectedRecording.url}`} 
                   height="350px" 
                   width="100%"
                   showControls={true}

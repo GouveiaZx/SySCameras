@@ -111,21 +111,26 @@ export default function ClientModal({ isOpen, onClose, onSave, client, mode }: C
   }
   
   // Enviar formulário
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!validateForm()) return
     
     setSubmitting(true)
     
-    // Remover senha do objeto se for vazia (no modo de edição)
-    const clientData = { ...formData }
-    if (mode === 'edit' && (!clientData.password || clientData.password.trim() === '')) {
-      clientData.password = undefined
+    try {
+      // Remover senha do objeto se for vazia (no modo de edição)
+      const clientData = { ...formData }
+      if (mode === 'edit' && (!clientData.password || clientData.password.trim() === '')) {
+        clientData.password = undefined
+      }
+      
+      await onSave(clientData, mode)
+    } catch (error) {
+      console.error('Erro no handleSubmit:', error)
+    } finally {
+      setSubmitting(false)
     }
-    
-    onSave(clientData, mode)
-    setSubmitting(false)
   }
   
   if (!isOpen) return null

@@ -13,15 +13,15 @@ let globalClientsCache: {
 // Timeout para invalidar cache (5 minutos)
 const CACHE_TIMEOUT = 5 * 60 * 1000;
 
-// Debounce para evitar chamadas múltiplas
-let debounceTimer: NodeJS.Timeout | null = null;
-
 // Tipos
 export interface Client {
   id: string;
   name: string;
   integratorId: string;
   userId: string;
+  email?: string;
+  company?: string;
+  isActive?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,12 +134,26 @@ export async function fetchClientById(clientId: string, token: string): Promise<
  */
 export async function createClient(clientData: CreateClientData, token: string): Promise<Client> {
   try {
+    console.log('🔄 Iniciando criação de cliente:', clientData.email);
+    
+    // Verificar se já existe usuário com este email
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', clientData.email)
+      .single();
+
+    if (existingUser) {
+      throw new Error('Este email já está em uso no sistema');
+    }
+
     // Primeiro criar o usuário na tabela users
     const { data: userData, error: userError } = await supabase
       .from('users')
       .insert([{
         email: clientData.email,
-        password: clientData.password, // Em produção, deveria ser hash
+        password: clientData.password,
+        name: clientData.name,
         role: 'client',
         isActive: clientData.isActive ?? true
       }])
@@ -147,33 +161,52 @@ export async function createClient(clientData: CreateClientData, token: string):
       .single();
 
     if (userError) {
-      console.error('Erro ao criar usuário:', userError);
-      throw new Error('Falha ao criar usuário');
+      console.error('❌ Erro ao criar usuário:', userError);
+      throw new Error('Falha ao criar usuário: ' + userError.message);
     }
 
-    // Depois criar o cliente
+    console.log('✅ Usuário criado:', userData.id);
+
+    // Buscar o primeiro integrador disponível para associar
+    const { data: integrator, error: integratorError } = await supabase
+      .from('integrators')
+      .select('id')
+      .limit(1)
+      .single();
+
+    if (integratorError || !integrator) {
+      // Se falhar ao buscar integrador, limpar o usuário criado
+      await supabase.from('users').delete().eq('id', userData.id);
+      throw new Error('Nenhum integrador encontrado para associar o cliente');
+    }
+
+    // Depois criar o cliente usando os nomes corretos das colunas
     const { data, error } = await supabase
       .from('clients')
       .insert([{
         name: clientData.name,
         userId: userData.id,
-        integratorId: 'current-integrator-id', // TODO: obter do token
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        integratorId: integrator.id,
+        company: clientData.company || null
       }])
       .select()
       .single();
 
     if (error) {
-      console.error('Erro ao criar cliente:', error);
-      // Tentar limpar o usuário criado
+      console.error('❌ Erro ao criar cliente:', error);
+      // Tentar limpar o usuário criado se o cliente falhar
       await supabase.from('users').delete().eq('id', userData.id);
-      throw new Error('Falha ao criar cliente');
+      throw new Error('Falha ao criar cliente: ' + error.message);
     }
+
+    console.log('✅ Cliente criado com sucesso:', data.id);
+
+    // Invalidar cache
+    invalidateClientsCache();
 
     return data;
   } catch (error) {
-    console.error('Erro ao criar cliente:', error);
+    console.error('❌ Erro ao criar cliente:', error);
     throw error;
   }
 }
@@ -215,6 +248,7 @@ export async function updateClient(clientId: string, clientData: UpdateClientDat
     };
     
     if (clientData.name) clientUpdateData.name = clientData.name;
+    if (clientData.company !== undefined) clientUpdateData.company = clientData.company;
 
     const { data, error } = await supabase
       .from('clients')
@@ -227,6 +261,9 @@ export async function updateClient(clientId: string, clientData: UpdateClientDat
       console.error('Erro ao atualizar cliente:', error);
       throw new Error('Falha ao atualizar cliente');
     }
+
+    // Invalidar cache
+    invalidateClientsCache();
 
     return data;
   } catch (error) {
@@ -266,6 +303,9 @@ export async function deleteClient(clientId: string, token: string): Promise<voi
       console.error('Erro ao deletar usuário:', userError);
       // Não falhar aqui pois o cliente já foi removido
     }
+
+    // Invalidar cache
+    invalidateClientsCache();
   } catch (error) {
     console.error('Erro ao deletar cliente:', error);
     throw error;

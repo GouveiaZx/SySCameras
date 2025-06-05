@@ -25,7 +25,7 @@ export default function RTSPPlayer({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
   const captureSnapshot = async () => {
     if (!session?.token) {
