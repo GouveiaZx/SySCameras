@@ -75,7 +75,7 @@ export async function fetchClients(token: string): Promise<Client[]> {
     console.log('🔍 Buscando clientes do Supabase...');
     
     const { data, error } = await supabase
-      .from('clients')
+      .from('clients_real')
       .select('*')
       .order('createdAt', { ascending: false });
 
@@ -109,7 +109,7 @@ export async function fetchClients(token: string): Promise<Client[]> {
 export async function fetchClientById(clientId: string, token: string): Promise<Client> {
   try {
     const { data, error } = await supabase
-      .from('clients')
+      .from('clients_real')
       .select('*')
       .eq('id', clientId)
       .single();
@@ -182,7 +182,7 @@ export async function createClient(clientData: CreateClientData, token: string):
 
     // Depois criar o cliente usando os nomes corretos das colunas
     const { data, error } = await supabase
-      .from('clients')
+      .from('clients_real')
       .insert([{
         name: clientData.name,
         userId: userData.id,
@@ -251,7 +251,7 @@ export async function updateClient(clientId: string, clientData: UpdateClientDat
     if (clientData.company !== undefined) clientUpdateData.company = clientData.company;
 
     const { data, error } = await supabase
-      .from('clients')
+      .from('clients_real')
       .update(clientUpdateData)
       .eq('id', clientId)
       .select()
@@ -284,7 +284,7 @@ export async function deleteClient(clientId: string, token: string): Promise<voi
     
     // Deletar o cliente
     const { error: clientError } = await supabase
-      .from('clients')
+      .from('clients_real')
       .delete()
       .eq('id', clientId);
 
